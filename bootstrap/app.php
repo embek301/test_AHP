@@ -20,6 +20,11 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleAppearance::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
+            // 'role' => \App\Http\Middleware\CheckRole::class,
+        ]);
+
+        $middleware->alias([
+            'role' => \App\Http\Middleware\CheckRole::class, 
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
