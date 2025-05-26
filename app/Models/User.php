@@ -2,81 +2,66 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, HasRoles;
+    use HasRoles, Notifiable;
 
     /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
+     * Properti untuk menyertakan relasi secara otomatis saat dikonversi ke array/JSON
      */
+    protected $appends = [];
     protected $fillable = [
         'name',
         'email',
         'password',
         'is_active',
     ];
-
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
+    /**
+     * Relasi yang otomatis disertakan saat konversi ke array/JSON
+     */
+    protected $with = ['siswaKelas.kelas'];
 
     /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
+     * Relasi dengan SiswaKelas
      */
-    protected function casts(): array
-    {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-        ];
-    }
-
-    /**
-     * Mendapatkan data guru jika user adalah seorang guru.
-     */
-    public function guru()
-    {
-        return $this->hasOne(Guru::class);
-    }
-
-    /**
-     * Mendapatkan kelas-kelas jika user adalah seorang siswa.
-     */
-    public function kelasAsSiswa()
+    public function siswaKelas(): HasMany
     {
         return $this->hasMany(SiswaKelas::class, 'user_id');
     }
 
     /**
-     * Mendapatkan evaluasi yang dilakukan oleh user.
+     * Getter untuk attribute role_names
+     * 
+     * @return array
      */
-    public function evaluasiDilakukan()
+    public function getRoleNamesAttribute()
     {
-        return $this->hasMany(Evaluasi::class, 'evaluator_id');
+        return $this->roles->pluck('name')->toArray();
     }
 
     /**
-     * Mendapatkan rekomendasi yang dibuat oleh user.
+     * Convert the model instance to an array.
+     *
+     * @return array
      */
-    public function rekomendasiDibuat()
+    public function toArray()
     {
-        return $this->hasMany(Rekomendasi::class, 'dibuat_oleh');
+        $array = parent::toArray();
+        
+        // Ensure siswaKelas is always an array
+        if (isset($array['siswa_kelas'])) {
+            $array['siswa_kelas'] = (array) $array['siswa_kelas'];
+        }
+        
+        return $array;
     }
 }

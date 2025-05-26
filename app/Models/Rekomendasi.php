@@ -1,6 +1,5 @@
 <?php
 
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -17,6 +16,14 @@ class Rekomendasi extends Model
      * @var string
      */
     protected $table = 'tt_rekomendasi';
+
+    /**
+     * Status yang tersedia untuk rekomendasi
+     */
+    const STATUS_DRAFT = 'draft';
+    const STATUS_DISETUJUI = 'disetujui';
+    const STATUS_DITOLAK = 'ditolak';
+    const STATUS_IMPLEMENTASI = 'implementasi';
 
     /**
      * Atribut yang dapat diisi (fillable).
@@ -44,6 +51,7 @@ class Rekomendasi extends Model
      */
     public function periodeEvaluasi(): BelongsTo
     {
+        // Pastikan nama tabel dan kolom foreign key sudah benar
         return $this->belongsTo(PeriodeEvaluasi::class, 'periode_evaluasi_id');
     }
 
@@ -53,5 +61,23 @@ class Rekomendasi extends Model
     public function pembuat(): BelongsTo
     {
         return $this->belongsTo(User::class, 'dibuat_oleh');
+    }
+    
+    /**
+     * Mendapatkan daftar status yang valid untuk rekomendasi.
+     */
+    public static function getValidStatuses(): array
+    {
+        return [
+            self::STATUS_DRAFT => 'Draft',
+            self::STATUS_DISETUJUI => 'Disetujui',
+            self::STATUS_DITOLAK => 'Ditolak',
+            self::STATUS_IMPLEMENTASI => 'Implementasi',
+        ];
+    }
+
+     public function getPeriodeJudulAttribute()
+    {
+        return $this->periodeEvaluasi ? $this->periodeEvaluasi->judul : 'Periode tidak tersedia';
     }
 }

@@ -28,6 +28,8 @@ class Evaluasi extends Model
         'periode_evaluasi_id',
         'evaluator_id',
         'guru_id',
+        'status',           // Kolom baru
+        'komentar_umum',    // Kolom baru
     ];
 
     /**

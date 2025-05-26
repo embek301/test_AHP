@@ -14,8 +14,7 @@ import {
     GraduationCap,
     LayoutGrid,
     LineChart,
-    Settings,
-    User,
+    UserCircle2,
     Users
 } from 'lucide-react';
 import AppLogo from './app-logo';
@@ -62,13 +61,19 @@ export function AppSidebar() {
             icon: BookmarkIcon,
         },
         {
+            title: 'Siswa',
+            href: '/admin/siswa',
+            icon: UserCircle2,
+
+        },
+        {
             title: 'Mata Pelajaran',
             href: '/admin/mata-pelajaran',
             icon: BookOpen,
         },
         {
             title: 'Guru',
-            href: '/admin/guru',
+            href: '/guru',
             icon: GraduationCap,
         },
         {
@@ -83,13 +88,8 @@ export function AppSidebar() {
         },
         {
             title: 'Hasil Evaluasi',
-            href: '/admin/hasil-evaluasi',
+            href: '/hasil-evaluasi',
             icon: LineChart,
-        },
-        {
-            title: 'Pengaturan',
-            href: '/admin/settings',
-            icon: Settings,
         },
     ];
     
@@ -102,28 +102,23 @@ export function AppSidebar() {
         },
         {
             title: 'Form Evaluasi',
-            href: '/evaluasi-form',
+            href: '/kepsek/evaluasi-form',
             icon: FileText,
         },
         {
             title: 'Hasil Evaluasi',
-            href: '/hasil-evaluasi',
+            href: '/kepsek/hasil-evaluasi',
             icon: LineChart,
         },
         {
             title: 'Rekomendasi',
-            href: '/rekomendasi',
+            href: '/kepsek/rekomendasi',
             icon: Award,
         },
     ];
     
     // Menu untuk Guru
     const guruMenu: NavItem[] = [
-        {
-            title: 'Profil',
-            href: '/profile',
-            icon: User,
-        },
         {
             title: 'Form Evaluasi Rekan',
             href: '/evaluasi-rekan',
@@ -143,11 +138,6 @@ export function AppSidebar() {
             href: '/evaluasi-guru',
             icon: FileText,
         },
-        {
-            title: 'Kelas Saya',
-            href: '/kelas-saya',
-            icon: BookmarkIcon,
-        },
     ];
     
     // Menentukan menu yang akan ditampilkan berdasarkan role
@@ -164,11 +154,11 @@ export function AppSidebar() {
     }
 
     const footerNavItems: NavItem[] = [
-        {
-            title: 'Bantuan',
-            href: '/help',
-            icon: BookOpen,
-        },
+        // {
+        //     title: 'Bantuan',
+        //     href: '/help',
+        //     icon: BookOpen,
+        // },
     ];
 
     return (

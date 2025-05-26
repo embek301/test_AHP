@@ -26,6 +26,17 @@ class MataPelajaran extends Model
     protected $fillable = [
         'nama',
         'kode',
+        'deskripsi',
+        'is_active',
+    ];
+
+    /**
+     * Atribut yang seharusnya dikonversi ke tipe data tertentu.
+     *
+     * @var array
+     */
+    protected $casts = [
+        'is_active' => 'boolean',
     ];
 
     /**

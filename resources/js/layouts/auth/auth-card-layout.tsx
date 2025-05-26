@@ -12,26 +12,46 @@ export default function AuthCardLayout({
     description?: string;
 }>) {
     return (
-        <div className="bg-muted flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">
-            <div className="flex w-full max-w-md flex-col gap-6">
-                <Link href={route('home')} className="flex items-center gap-2 self-center font-medium">
-                    <div className="flex h-16 w-16 items-center justify-center">
-                        <img 
-                            src="https://neoflash.sgp1.cdn.digitaloceanspaces.com/logo-destra.png" 
-                            alt="Destra Logo" 
-                            className="size-14 object-contain"
-                        />
-                    </div>
-                </Link>
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
+            {/* Background Pattern */}
+            <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+            
+            <div className="relative w-full max-w-md">
+                {/* Logo Section */}
+                <div className="text-center mb-8">
+                    <Link href={route('home')} className="inline-block">
+                        <div className="mx-auto mb-4 relative">
+                            <div className="w-24 h-24 mx-auto bg-white rounded-2xl shadow-lg flex items-center justify-center border border-gray-100">
+                                <img 
+                                    src="https://neoflash.sgp1.cdn.digitaloceanspaces.com/logo-destra.png" 
+                                    alt="Destra Logo" 
+                                    className="w-16 h-16 object-contain"
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <h1 className="text-2xl font-bold text-gray-900">SMK IGASAR PINDAD</h1>
+                            <p className="text-sm text-gray-600">Sistem Evaluasi Guru</p>
+                        </div>
+                    </Link>
+                </div>
 
-                <div className="flex flex-col gap-6">
-                    <Card className="rounded-xl">
-                        <CardHeader className="px-10 pt-8 pb-0 text-center">
-                            <CardTitle className="text-xl">{title}</CardTitle>
-                            <CardDescription>{description}</CardDescription>
-                        </CardHeader>
-                        <CardContent className="px-10 py-8">{children}</CardContent>
-                    </Card>
+                {/* Main Card */}
+                <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-2xl rounded-2xl overflow-hidden">
+                    <CardHeader className="px-8 pt-8 pb-2 text-center bg-gradient-to-r  text-gray-800">
+                        <CardTitle className="text-xl font-semibold">{title}</CardTitle>
+                        <CardDescription className="text-gray-800 text-sm">{description}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="px-8 py-8">
+                        {children}
+                    </CardContent>
+                </Card>
+
+                {/* Footer */}
+                <div className="text-center mt-6">
+                    <p className="text-xs text-gray-500">
+                        © 2025 SMK IGASAR PINDAD. Semua hak dilindungi undang-undang.
+                    </p>
                 </div>
             </div>
         </div>
