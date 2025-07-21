@@ -23,14 +23,14 @@ export default function AuthCardLayout({
                         <div className="mx-auto mb-4 relative">
                             <div className="w-24 h-24 mx-auto bg-white rounded-2xl shadow-lg flex items-center justify-center border border-gray-100">
                                 <img 
-                                    src="https://neoflash.sgp1.cdn.digitaloceanspaces.com/logo-destra.png" 
+                                    src="https://neoflash.sgp1.cdn.digitaloceanspaces.com/logo-smp-penida.png" 
                                     alt="Destra Logo" 
                                     className="w-16 h-16 object-contain"
                                 />
                             </div>
                         </div>
                         <div className="space-y-1">
-                            <h1 className="text-2xl font-bold text-gray-900">SMK IGASAR PINDAD</h1>
+                            <h1 className="text-2xl font-bold text-gray-900">SMK PENIDA KATAPANG</h1>
                             <p className="text-sm text-gray-600">Sistem Evaluasi Guru</p>
                         </div>
                     </Link>
