@@ -9,7 +9,7 @@ export default function AppLogo() {
                 />
             </div>
             <div className="ml-3 grid flex-1 text-left text-sm">
-                <span className="mb-0.5 truncate leading-none font-semibold text-gray-900">SMK PENIDA</span>
+                <span className="mb-0.5 truncate leading-none font-semibold text-gray-900">SMP PENIDA</span>
                 <span className="truncate text-xs text-gray-500">Sistem Evaluasi Guru</span>
             </div>
         </>

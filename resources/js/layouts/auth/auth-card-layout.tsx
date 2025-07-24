@@ -30,7 +30,7 @@ export default function AuthCardLayout({
                             </div>
                         </div>
                         <div className="space-y-1">
-                            <h1 className="text-2xl font-bold text-gray-900">SMK PENIDA KATAPANG</h1>
+                            <h1 className="text-2xl font-bold text-gray-900">SMP PENIDA KATAPANG</h1>
                             <p className="text-sm text-gray-600">Sistem Evaluasi Guru</p>
                         </div>
                     </Link>
@@ -50,7 +50,7 @@ export default function AuthCardLayout({
                 {/* Footer */}
                 <div className="text-center mt-6">
                     <p className="text-xs text-gray-500">
-                        © 2025 SMK IGASAR PINDAD. Semua hak dilindungi undang-undang.
+                        © 2025 SMP PENIDA KATAPANG. Semua hak dilindungi undang-undang.
                     </p>
                 </div>
             </div>
