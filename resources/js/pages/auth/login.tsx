@@ -161,7 +161,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                 {/* Footer Info */}
                 <div className="text-center pt-4">
                     <p className="text-sm text-gray-500">
-                        Sistem Evaluasi Guru - SMK IGASAR PINDAD
+                        Sistem Evaluasi Guru - SMP PENIDA KATAPANG
                     </p>
                     <p className="text-xs text-gray-400 mt-1">
                         Hubungi administrator jika mengalami kesulitan login
