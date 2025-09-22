@@ -107,7 +107,7 @@ export function AppSidebar() {
         },
         {
             title: 'Hasil Evaluasi',
-            href: '/kepsek/hasil-evaluasi',
+            href: '/hasil-evaluasi',
             icon: LineChart,
         },
         {
