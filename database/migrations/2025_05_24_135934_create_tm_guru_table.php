@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    
     /**
      * Run the migrations.
      */
@@ -14,7 +15,7 @@ return new class extends Migration
         Schema::create('tm_guru', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained('users');
-            $table->string('nip');
+            $table->string('nip',15);
             $table->foreignId('mata_pelajaran_id')->constrained('tm_mata_pelajaran');
             $table->date('tanggal_bergabung');
             $table->timestamps();

@@ -119,14 +119,17 @@ class EvaluasiRekanController extends Controller
                 ->with('error', 'Tidak ada periode evaluasi yang aktif saat ini.');
         }
         
-        // Dapatkan daftar kriteria
-        $kriteriaList = Kriteria::where('aktif', true)
+        // Dapatkan daftar kriteria dengan sub kriteria yang aktif
+        $kriteriaList = Kriteria::with(['subKriteria' => function ($query) {
+            $query->where('aktif', true)->orderBy('urutan');
+        }])
+            ->where('aktif', true)
             ->orderBy('nama')
             ->get();
         
         // Periksa apakah evaluasi sudah ada
         $user = Auth::user();
-        $evaluasi = Evaluasi::with('detailEvaluasi')
+        $evaluasi = Evaluasi::with(['detailEvaluasi.subKriteria'])
             ->where('guru_id', $guruId)
             ->where('periode_evaluasi_id', $periodeAktif->id)
             ->where('evaluator_id', $user->id)
@@ -149,11 +152,15 @@ class EvaluasiRekanController extends Controller
      */
     public function store(Request $request)
     {
+        // Debug: Log request data
+        \Log::info('Request data received:', $request->all());
+        
         $request->validate([
             'guru_id' => 'required|exists:tm_guru,id',
             'periode_evaluasi_id' => 'required|exists:tt_periode_evaluasi,id',
             'detail_evaluasi' => 'required|array',
             'detail_evaluasi.*.kriteria_id' => 'required|exists:tm_kriteria,id',
+            'detail_evaluasi.*.sub_kriteria_id' => 'nullable|exists:tm_sub_kriteria,id',
             'detail_evaluasi.*.nilai' => 'required|numeric|min:1|max:5',
             'detail_evaluasi.*.komentar' => 'nullable|string',
             'status' => 'required|in:draft,selesai',
@@ -191,27 +198,39 @@ class EvaluasiRekanController extends Controller
                 'jenis' => 'rekan', // Tetapkan jenis sebagai evaluasi rekan
             ]);
             
+            \Log::info('Evaluasi created with ID: ' . $evaluasi->id);
+            
             // Buat detail evaluasi
-            foreach ($request->detail_evaluasi as $detail) {
-                DetailEvaluasi::create([
+            foreach ($request->detail_evaluasi as $index => $detail) {
+                $detailData = [
                     'evaluasi_id' => $evaluasi->id,
                     'kriteria_id' => $detail['kriteria_id'],
+                    'sub_kriteria_id' => $detail['sub_kriteria_id'] ?? null,
                     'nilai' => $detail['nilai'],
                     'komentar' => $detail['komentar'] ?? null,
-                ]);
+                ];
+                
+                \Log::info("Creating detail evaluasi [$index]:", $detailData);
+                
+                DetailEvaluasi::create($detailData);
             }
             
             // Tambahkan komentar umum jika ada
             if ($request->komentar_umum) {
                 DetailEvaluasi::create([
                     'evaluasi_id' => $evaluasi->id,
-                    'kriteria_id' => null, // Kriteria null untuk komentar umum
+                    'kriteria_id' => null,
+                    'sub_kriteria_id' => null,
                     'nilai' => 0,
                     'komentar' => $request->komentar_umum,
                 ]);
+                
+                \Log::info('Komentar umum created');
             }
             
             DB::commit();
+            
+            \Log::info('Transaction committed successfully');
             
             return redirect()->route('evaluasi-rekan.show', $evaluasi->id)
                 ->with('message', $request->status === 'selesai' 
@@ -220,6 +239,9 @@ class EvaluasiRekanController extends Controller
                     
         } catch (\Exception $e) {
             DB::rollback();
+            
+            \Log::error('Error storing evaluasi: ' . $e->getMessage());
+            \Log::error('Stack trace: ' . $e->getTraceAsString());
             
             return redirect()->back()
                 ->with('error', 'Gagal menyimpan evaluasi: ' . $e->getMessage());
@@ -231,7 +253,10 @@ class EvaluasiRekanController extends Controller
      */
     public function show($id)
     {
-        $evaluasi = Evaluasi::with('detailEvaluasi')->findOrFail($id);
+        $evaluasi = Evaluasi::with([
+            'detailEvaluasi.kriteria',
+            'detailEvaluasi.subKriteria'
+        ])->findOrFail($id);
         
         // Pemeriksaan keamanan: hanya tampilkan jika pengguna adalah evaluator
         if ($evaluasi->evaluator_id !== Auth::id()) {
@@ -242,8 +267,13 @@ class EvaluasiRekanController extends Controller
         $guru = Guru::with(['user', 'mataPelajaran'])->findOrFail($evaluasi->guru_id);
         $periodeEvaluasi = PeriodeEvaluasi::findOrFail($evaluasi->periode_evaluasi_id);
         
-        // Dapatkan daftar kriteria dengan detail
-        $kriteriaList = Kriteria::where('aktif', true)->orderBy('nama')->get();
+        // Dapatkan daftar kriteria dengan sub kriteria
+        $kriteriaList = Kriteria::with(['subKriteria' => function ($query) {
+            $query->where('aktif', true)->orderBy('urutan');
+        }])
+            ->where('aktif', true)
+            ->orderBy('nama')
+            ->get();
         
         return Inertia::render('Guru/EvaluasiRekan/Show', [
             'guru' => $guru,
@@ -258,7 +288,10 @@ class EvaluasiRekanController extends Controller
      */
     public function edit($id)
     {
-        $evaluasi = Evaluasi::with('detailEvaluasi')->findOrFail($id);
+        $evaluasi = Evaluasi::with([
+            'detailEvaluasi.kriteria',
+            'detailEvaluasi.subKriteria'
+        ])->findOrFail($id);
         
         // Pemeriksaan keamanan: hanya edit jika pengguna adalah evaluator
         if ($evaluasi->evaluator_id !== Auth::id()) {
@@ -275,8 +308,13 @@ class EvaluasiRekanController extends Controller
                 ->with('error', 'Periode evaluasi sudah tidak aktif, tidak dapat mengedit evaluasi');
         }
         
-        // Dapatkan daftar kriteria
-        $kriteriaList = Kriteria::where('aktif', true)->orderBy('nama')->get();
+        // Dapatkan daftar kriteria dengan sub kriteria
+        $kriteriaList = Kriteria::with(['subKriteria' => function ($query) {
+            $query->where('aktif', true)->orderBy('urutan');
+        }])
+            ->where('aktif', true)
+            ->orderBy('nama')
+            ->get();
         
         return Inertia::render('Guru/EvaluasiRekan/Edit', [
             'guru' => $guru,
@@ -294,6 +332,7 @@ class EvaluasiRekanController extends Controller
         $request->validate([
             'detail_evaluasi' => 'required|array',
             'detail_evaluasi.*.kriteria_id' => 'required|exists:tm_kriteria,id',
+            'detail_evaluasi.*.sub_kriteria_id' => 'nullable|exists:tm_sub_kriteria,id',
             'detail_evaluasi.*.nilai' => 'required|numeric|min:1|max:5',
             'detail_evaluasi.*.komentar' => 'nullable|string',
             'status' => 'required|in:draft,selesai',
@@ -322,27 +361,30 @@ class EvaluasiRekanController extends Controller
             $evaluasi->status = $request->status;
             $evaluasi->save();
             
-            // Update detail evaluasi
+            // Hapus detail evaluasi lama (kecuali komentar umum)
+            DetailEvaluasi::where('evaluasi_id', $evaluasi->id)
+                ->whereNotNull('kriteria_id')
+                ->delete();
+            
+            // Buat detail evaluasi baru
             foreach ($request->detail_evaluasi as $detail) {
-                DetailEvaluasi::updateOrCreate(
-                    [
-                        'evaluasi_id' => $evaluasi->id,
-                        'kriteria_id' => $detail['kriteria_id'],
-                    ],
-                    [
-                        'nilai' => $detail['nilai'],
-                        'komentar' => $detail['komentar'] ?? null,
-                    ]
-                );
+                DetailEvaluasi::create([
+                    'evaluasi_id' => $evaluasi->id,
+                    'kriteria_id' => $detail['kriteria_id'],
+                    'sub_kriteria_id' => $detail['sub_kriteria_id'] ?? null,
+                    'nilai' => $detail['nilai'],
+                    'komentar' => $detail['komentar'] ?? null,
+                ]);
             }
             
-            // Update komentar umum
+            // Update atau create komentar umum
             DetailEvaluasi::updateOrCreate(
                 [
                     'evaluasi_id' => $evaluasi->id,
                     'kriteria_id' => null,
                 ],
                 [
+                    'sub_kriteria_id' => null,
                     'nilai' => 0,
                     'komentar' => $request->komentar_umum ?? null,
                 ]
@@ -357,6 +399,9 @@ class EvaluasiRekanController extends Controller
                     
         } catch (\Exception $e) {
             DB::rollback();
+            
+            \Log::error('Error updating evaluasi: ' . $e->getMessage());
+            \Log::error('Stack trace: ' . $e->getTraceAsString());
             
             return redirect()->back()
                 ->with('error', 'Gagal mengupdate evaluasi: ' . $e->getMessage());

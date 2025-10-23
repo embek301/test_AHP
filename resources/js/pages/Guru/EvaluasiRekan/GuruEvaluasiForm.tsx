@@ -18,6 +18,7 @@ import {
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 
 // Interfaces
 interface Guru {
@@ -31,11 +32,22 @@ interface Guru {
     };
 }
 
+interface SubKriteria {
+    id: number;
+    kriteria_id: number;
+    nama: string;
+    deskripsi: string;
+    bobot: number;
+    urutan: number;
+    aktif: boolean;
+}
+
 interface Kriteria {
     id: number;
     nama: string;
     deskripsi: string;
     bobot: number;
+    sub_kriteria?: SubKriteria[];
 }
 
 interface PeriodeEvaluasi {
@@ -45,6 +57,7 @@ interface PeriodeEvaluasi {
 
 interface DetailEvaluasi {
     kriteria_id: number;
+    sub_kriteria_id?: number | null;
     nilai: number;
     komentar?: string;
 }
@@ -58,7 +71,6 @@ interface Evaluasi {
     detail_evaluasi: DetailEvaluasi[];
 }
 
-// Form props
 interface GuruEvaluasiFormProps {
     guru: Guru;
     kriteriaList: Kriteria[];
@@ -71,6 +83,7 @@ interface GuruEvaluasiFormProps {
 // Zod schema for form validation
 const detailEvaluasiSchema = z.object({
     kriteria_id: z.number(),
+    sub_kriteria_id: z.number().nullable().optional(),
     nilai: z.number().min(1, "Nilai harus diisi").max(5, "Nilai maksimal adalah 5"),
     komentar: z.string().optional(),
 });
@@ -97,19 +110,47 @@ export default function GuruEvaluasiForm({
     const [currentSection, setCurrentSection] = useState(0);
     const [maxCompletedSection, setMaxCompletedSection] = useState(0);
     
-    // Kelompokkan kriteria menjadi beberapa bagian dengan 5 kriteria per bagian
-    const sectionedKriteria = chunkArray(kriteriaList, 5);
+    // Hitung total item (kriteria + sub kriteria)
+    const allEvaluationItems: Array<{
+        type: 'kriteria' | 'sub_kriteria';
+        kriteria: Kriteria;
+        subKriteria?: SubKriteria;
+        index: number;
+    }> = [];
+    
+    kriteriaList.forEach((kriteria) => {
+        if (kriteria.sub_kriteria && kriteria.sub_kriteria.length > 0) {
+            kriteria.sub_kriteria.forEach((subKriteria) => {
+                allEvaluationItems.push({
+                    type: 'sub_kriteria',
+                    kriteria,
+                    subKriteria,
+                    index: allEvaluationItems.length,
+                });
+            });
+        } else {
+            allEvaluationItems.push({
+                type: 'kriteria',
+                kriteria,
+                index: allEvaluationItems.length,
+            });
+        }
+    });
+    
+    // Kelompokkan items menjadi beberapa bagian dengan 5 items per bagian
+    const sectionedItems = chunkArray(allEvaluationItems, 5);
     
     // Inisialisasi nilai default
     const getDefaultValues = (): EvaluasiFormValues => {
         if (evaluasi) {
-            // Untuk mode edit/view, gunakan data evaluasi yang sudah ada
-            const detailMap: Record<number, DetailEvaluasi> = {};
+            const detailMap: Record<string, DetailEvaluasi> = {};
             evaluasi.detail_evaluasi.forEach(detail => {
-                detailMap[detail.kriteria_id] = detail;
+                const key = detail.sub_kriteria_id 
+                    ? `${detail.kriteria_id}-${detail.sub_kriteria_id}`
+                    : `${detail.kriteria_id}`;
+                detailMap[key] = detail;
             });
             
-            // Cari komentar_umum dari detail_evaluasi dengan kriteria_id = 0 or null
             const komentarUmum = evaluasi.detail_evaluasi.find(
                 detail => !detail.kriteria_id
             )?.komentar || '';
@@ -119,21 +160,29 @@ export default function GuruEvaluasiForm({
                 periode_evaluasi_id: evaluasi.periode_evaluasi_id,
                 status: evaluasi.status,
                 komentar_umum: komentarUmum,
-                detail_evaluasi: kriteriaList.map(kriteria => ({
-                    kriteria_id: kriteria.id,
-                    nilai: detailMap[kriteria.id]?.nilai || 0,
-                    komentar: detailMap[kriteria.id]?.komentar || '',
-                })),
+                detail_evaluasi: allEvaluationItems.map(item => {
+                    const key = item.subKriteria 
+                        ? `${item.kriteria.id}-${item.subKriteria.id}`
+                        : `${item.kriteria.id}`;
+                    const detail = detailMap[key];
+                    
+                    return {
+                        kriteria_id: item.kriteria.id,
+                        sub_kriteria_id: item.subKriteria?.id ?? null,
+                        nilai: detail?.nilai || 0,
+                        komentar: detail?.komentar || '',
+                    };
+                }),
             };
         } else {
-            // Untuk mode create, inisialisasi form kosong
             return {
                 guru_id: guru.id,
                 periode_evaluasi_id: periodeAktif.id,
                 status: 'draft',
                 komentar_umum: '',
-                detail_evaluasi: kriteriaList.map(kriteria => ({
-                    kriteria_id: kriteria.id,
+                detail_evaluasi: allEvaluationItems.map(item => ({
+                    kriteria_id: item.kriteria.id,
+                    sub_kriteria_id: item.subKriteria?.id ?? null,
                     nilai: 0,
                     komentar: '',
                 })),
@@ -141,19 +190,16 @@ export default function GuruEvaluasiForm({
         }
     };
 
-    // Inisialisasi form
     const form = useForm<EvaluasiFormValues>({
         resolver: zodResolver(evaluasiSchema),
         defaultValues: getDefaultValues(),
     });
     
-    // Pantau semua nilai form untuk menghitung progress
     const formValues = form.watch();
     
-    // Hitung persentase penyelesaian
     const calculateCompletion = () => {
         let filled = 0;
-        const total = kriteriaList.length;
+        const total = allEvaluationItems.length;
         
         formValues.detail_evaluasi.forEach(detail => {
             if (detail.nilai > 0) filled++;
@@ -164,11 +210,15 @@ export default function GuruEvaluasiForm({
     
     const completionPercentage = calculateCompletion();
     
-    // Pindah ke bagian berikutnya jika bagian saat ini sudah selesai
     useEffect(() => {
-        const currentSectionKriteria = sectionedKriteria[currentSection] || [];
-        const isCurrentSectionComplete = currentSectionKriteria.every(kriteria => {
-            const detail = formValues.detail_evaluasi.find(d => d.kriteria_id === kriteria.id);
+        const currentSectionItems = sectionedItems[currentSection] || [];
+        const isCurrentSectionComplete = currentSectionItems.every(item => {
+            const detail = formValues.detail_evaluasi.find(d => {
+                if (item.subKriteria) {
+                    return d.kriteria_id === item.kriteria.id && d.sub_kriteria_id === item.subKriteria.id;
+                }
+                return d.kriteria_id === item.kriteria.id && !d.sub_kriteria_id;
+            });
             return detail && detail.nilai > 0;
         });
         
@@ -177,7 +227,6 @@ export default function GuruEvaluasiForm({
         }
     }, [formValues.detail_evaluasi, currentSection]);
 
-    // Fungsi navigasi antar bagian
     const goToSection = (index: number) => {
         if (index <= maxCompletedSection + 1) {
             setCurrentSection(index);
@@ -185,7 +234,7 @@ export default function GuruEvaluasiForm({
     };
 
     const goToNextSection = () => {
-        if (currentSection < sectionedKriteria.length) {
+        if (currentSection < sectionedItems.length) {
             setCurrentSection(currentSection + 1);
         }
     };
@@ -196,17 +245,18 @@ export default function GuruEvaluasiForm({
         }
     };
 
-    // Handler submit form
     const onSubmit = (data: EvaluasiFormValues, status: 'draft' | 'selesai' = 'draft') => {
         data.status = status;
-        
         setIsSubmitting(true);
         
-        // Siapkan payload
         const payload = {
             ...data,
             komentar_umum: data.komentar_umum,
         };
+        
+        // Debug: Log payload sebelum dikirim
+        console.log('Payload yang akan dikirim:', payload);
+        console.log('Detail evaluasi:', payload.detail_evaluasi);
         
         if (mode === 'edit' && evaluasi?.id) {
             router.put(
@@ -220,7 +270,7 @@ export default function GuruEvaluasiForm({
                         onClose && onClose();
                     },
                     onError: (errors) => {
-                        console.error(errors);
+                        console.error('Error dari server:', errors);
                         toast.error('Terjadi kesalahan saat menyimpan evaluasi');
                         setIsSubmitting(false);
                     },
@@ -238,7 +288,7 @@ export default function GuruEvaluasiForm({
                         onClose && onClose();
                     },
                     onError: (errors) => {
-                        console.error(errors);
+                        console.error('Error dari server:', errors);
                         toast.error('Terjadi kesalahan saat menyimpan evaluasi');
                         setIsSubmitting(false);
                     },
@@ -247,7 +297,6 @@ export default function GuruEvaluasiForm({
         }
     };
 
-    // Fungsi bantuan untuk memecah array menjadi kelompok
     function chunkArray<T>(array: T[], size: number): T[][] {
         const result: T[][] = [];
         for (let i = 0; i < array.length; i += size) {
@@ -256,7 +305,6 @@ export default function GuruEvaluasiForm({
         return result;
     }
 
-    // Render tampilan khusus untuk mode view
     if (mode === 'view') {
         return (
             <div className="space-y-6">
@@ -275,16 +323,41 @@ export default function GuruEvaluasiForm({
                 </div>
 
                 <div className="space-y-6">
-                    {kriteriaList.map((kriteria, index) => {
-                        const detail = formValues.detail_evaluasi.find(d => d.kriteria_id === kriteria.id);
+                    {allEvaluationItems.map((item, index) => {
+                        const detail = formValues.detail_evaluasi.find(d => {
+                            if (item.subKriteria) {
+                                return d.kriteria_id === item.kriteria.id && d.sub_kriteria_id === item.subKriteria.id;
+                            }
+                            return d.kriteria_id === item.kriteria.id && !d.sub_kriteria_id;
+                        });
+                        
                         return (
-                            <div key={kriteria.id} className="rounded-md border p-4 space-y-3">
+                            <div key={`${item.kriteria.id}-${item.subKriteria?.id || 'main'}`} className="rounded-md border p-4 space-y-3">
                                 <div>
-                                    <h3 className="font-medium">
-                                        {index + 1}. {kriteria.nama}
-                                    </h3>
-                                    {kriteria.deskripsi && (
-                                        <p className="text-sm text-gray-500 mt-1">{kriteria.deskripsi}</p>
+                                    {item.type === 'sub_kriteria' && item.subKriteria ? (
+                                        <>
+                                            <Badge variant="outline" className="mb-2 bg-purple-50 text-purple-700">
+                                                {item.kriteria.nama}
+                                            </Badge>
+                                            <h3 className="font-medium">
+                                                {index + 1}. {item.subKriteria.nama}
+                                            </h3>
+                                            {item.subKriteria.deskripsi && (
+                                                <p className="text-sm text-gray-500 mt-1">{item.subKriteria.deskripsi}</p>
+                                            )}
+                                            <Badge variant="secondary" className="mt-2">
+                                                Bobot: {item.subKriteria.bobot}%
+                                            </Badge>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <h3 className="font-medium">
+                                                {index + 1}. {item.kriteria.nama}
+                                            </h3>
+                                            {item.kriteria.deskripsi && (
+                                                <p className="text-sm text-gray-500 mt-1">{item.kriteria.deskripsi}</p>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                                 
@@ -326,12 +399,10 @@ export default function GuruEvaluasiForm({
         );
     }
 
-    // Form utama untuk mode create/edit
     return (
         <Form {...form}>
             <form onSubmit={form.handleSubmit(() => onSubmit(form.getValues(), 'selesai'))}>
                 <div className="space-y-6">
-                    {/* Progress bar */}
                     <div className="space-y-2">
                         <div className="flex justify-between text-sm">
                             <span>Progress</span>
@@ -345,12 +416,15 @@ export default function GuruEvaluasiForm({
                         </div>
                     </div>
 
-                    {/* Section navigation */}
                     <div className="flex overflow-x-auto pb-2 gap-2">
-                        {sectionedKriteria.map((section, index) => {
-                            // Cek apakah bagian sudah selesai
-                            const isSectionComplete = section.every(kriteria => {
-                                const detail = formValues.detail_evaluasi.find(d => d.kriteria_id === kriteria.id);
+                        {sectionedItems.map((section, index) => {
+                            const isSectionComplete = section.every(item => {
+                                const detail = formValues.detail_evaluasi.find(d => {
+                                    if (item.subKriteria) {
+                                        return d.kriteria_id === item.kriteria.id && d.sub_kriteria_id === item.subKriteria.id;
+                                    }
+                                    return d.kriteria_id === item.kriteria.id && !d.sub_kriteria_id;
+                                });
                                 return detail && detail.nilai > 0;
                             });
                             
@@ -369,18 +443,17 @@ export default function GuruEvaluasiForm({
                         })}
                         <Button
                             type="button"
-                            variant={currentSection === sectionedKriteria.length ? "default" : "outline"}
+                            variant={currentSection === sectionedItems.length ? "default" : "outline"}
                             className="px-3"
-                            onClick={() => goToSection(sectionedKriteria.length)}
-                            disabled={sectionedKriteria.length > maxCompletedSection + 1}
+                            onClick={() => goToSection(sectionedItems.length)}
+                            disabled={sectionedItems.length > maxCompletedSection + 1}
                         >
                             Komentar
                         </Button>
                     </div>
 
-                    {/* Current section content */}
                     <ScrollArea className="h-[460px] rounded-md border p-4">
-                        {currentSection === sectionedKriteria.length ? (
+                        {currentSection === sectionedItems.length ? (
                             <div className="space-y-4">
                                 <h2 className="text-xl font-medium">Komentar Umum</h2>
                                 <p className="text-gray-500 text-sm">
@@ -410,18 +483,36 @@ export default function GuruEvaluasiForm({
                             </div>
                         ) : (
                             <div className="space-y-8">
-                                {sectionedKriteria[currentSection]?.map((kriteria, kritIndex) => {
-                                    const detailIndex = kriteriaList.findIndex(k => k.id === kriteria.id);
-                                    if (detailIndex === -1) return null;
+                                {sectionedItems[currentSection]?.map((item) => {
+                                    const detailIndex = item.index;
                                     
                                     return (
-                                        <div key={kriteria.id} className="space-y-4">
+                                        <div key={`${item.kriteria.id}-${item.subKriteria?.id || 'main'}`} className="space-y-4">
                                             <div>
-                                                <h2 className="text-lg font-medium">
-                                                    {currentSection * 5 + kritIndex + 1}. {kriteria.nama}
-                                                </h2>
-                                                {kriteria.deskripsi && (
-                                                    <p className="mt-1 text-sm text-gray-500">{kriteria.deskripsi}</p>
+                                                {item.type === 'sub_kriteria' && item.subKriteria ? (
+                                                    <>
+                                                        <Badge variant="outline" className="mb-2 bg-purple-50 text-purple-700">
+                                                            {item.kriteria.nama}
+                                                        </Badge>
+                                                        <h2 className="text-lg font-medium">
+                                                            {detailIndex + 1}. {item.subKriteria.nama}
+                                                        </h2>
+                                                        {item.subKriteria.deskripsi && (
+                                                            <p className="mt-1 text-sm text-gray-500">{item.subKriteria.deskripsi}</p>
+                                                        )}
+                                                        <Badge variant="secondary" className="mt-2">
+                                                            Bobot: {item.subKriteria.bobot}%
+                                                        </Badge>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <h2 className="text-lg font-medium">
+                                                            {detailIndex + 1}. {item.kriteria.nama}
+                                                        </h2>
+                                                        {item.kriteria.deskripsi && (
+                                                            <p className="mt-1 text-sm text-gray-500">{item.kriteria.deskripsi}</p>
+                                                        )}
+                                                    </>
                                                 )}
                                             </div>
 
@@ -432,27 +523,22 @@ export default function GuruEvaluasiForm({
                                                     <FormItem className="space-y-1">
                                                         <FormLabel>Nilai</FormLabel>
                                                         <FormControl>
-                                                            <RadioGroup
-                                                                onValueChange={(value) => field.onChange(parseInt(value))}
-                                                                value={field.value ? field.value.toString() : undefined}
-                                                                className="flex space-x-2"
-                                                            >
+                                                            <div className="flex space-x-2">
                                                                 {[1, 2, 3, 4, 5].map((value) => (
-                                                                    <div key={value} className="flex items-center space-x-1">
-                                                                        <RadioGroupItem value={value.toString()} id={`nilai-${kriteria.id}-${value}`} className="sr-only" />
-                                                                        <label
-                                                                            htmlFor={`nilai-${kriteria.id}-${value}`}
-                                                                            className={`h-12 w-12 flex items-center justify-center rounded-full border-2 cursor-pointer transition-colors ${
-                                                                                field.value === value
-                                                                                    ? 'border-indigo-600 bg-indigo-100 text-indigo-800'
-                                                                                    : 'border-gray-300 hover:border-indigo-300 hover:bg-indigo-50'
-                                                                            }`}
-                                                                        >
-                                                                            {value}
-                                                                        </label>
-                                                                    </div>
+                                                                    <button
+                                                                        key={value}
+                                                                        type="button"
+                                                                        onClick={() => field.onChange(value)}
+                                                                        className={`h-12 w-12 flex items-center justify-center rounded-full border-2 cursor-pointer transition-colors ${
+                                                                            field.value === value
+                                                                                ? 'border-indigo-600 bg-indigo-100 text-indigo-800 font-semibold'
+                                                                                : 'border-gray-300 hover:border-indigo-300 hover:bg-indigo-50'
+                                                                        }`}
+                                                                    >
+                                                                        {value}
+                                                                    </button>
                                                                 ))}
-                                                            </RadioGroup>
+                                                            </div>
                                                         </FormControl>
                                                         <FormDescription>
                                                             1 = Sangat Kurang, 2 = Kurang, 3 = Cukup, 4 = Baik, 5 = Sangat Baik
@@ -486,7 +572,6 @@ export default function GuruEvaluasiForm({
                         )}
                     </ScrollArea>
 
-                    {/* Navigation buttons */}
                     <div className="flex justify-between pt-2">
                         <div>
                             <Button
@@ -507,14 +592,19 @@ export default function GuruEvaluasiForm({
                             >
                                 Simpan Draft
                             </Button>
-                            {currentSection < sectionedKriteria.length ? (
+                            {currentSection < sectionedItems.length ? (
                                 <Button
                                     type="button"
                                     onClick={goToNextSection}
                                     disabled={
-                                        currentSection >= sectionedKriteria.length || 
-                                        (currentSection < sectionedKriteria.length && !sectionedKriteria[currentSection]?.every(kriteria => {
-                                            const detail = form.getValues().detail_evaluasi.find(d => d.kriteria_id === kriteria.id);
+                                        currentSection >= sectionedItems.length || 
+                                        (currentSection < sectionedItems.length && !sectionedItems[currentSection]?.every(item => {
+                                            const detail = form.getValues().detail_evaluasi.find(d => {
+                                                if (item.subKriteria) {
+                                                    return d.kriteria_id === item.kriteria.id && d.sub_kriteria_id === item.subKriteria.id;
+                                                }
+                                                return d.kriteria_id === item.kriteria.id && !d.sub_kriteria_id;
+                                            });
                                             return detail && detail.nilai > 0;
                                         }))
                                     }

@@ -26,6 +26,7 @@ class DetailEvaluasi extends Model
     protected $fillable = [
         'evaluasi_id',
         'kriteria_id',
+        'sub_kriteria_id',
         'nilai',
         'komentar',
     ];
@@ -53,5 +54,12 @@ class DetailEvaluasi extends Model
     public function kriteria(): BelongsTo
     {
         return $this->belongsTo(Kriteria::class, 'kriteria_id');
+    }
+    /**
+     * Relasi ke sub kriteria
+     */
+    public function subKriteria(): BelongsTo
+    {
+        return $this->belongsTo(SubKriteria::class, 'sub_kriteria_id');
     }
 }

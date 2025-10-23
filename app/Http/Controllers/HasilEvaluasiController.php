@@ -334,147 +334,162 @@ class HasilEvaluasiController extends Controller
      * Generate hasil evaluasi untuk guru dan periode tertentu
      */
     private function generateHasilForGuruAndPeriode($guruId, $periodeId)
-    {
-        // Cek apakah sudah ada hasil evaluasi untuk guru dan periode tersebut
-        $existingHasil = HasilEvaluasi::where('guru_id', $guruId)
-            ->where('periode_evaluasi_id', $periodeId)
-            ->first();
+{
+    $existingHasil = HasilEvaluasi::where('guru_id', $guruId)
+        ->where('periode_evaluasi_id', $periodeId)
+        ->first();
 
-        // Hitung nilai rata-rata dari siswa
-        $nilaiSiswa = DB::table('tt_evaluasi as e')
-            ->join('users as u', 'e.evaluator_id', '=', 'u.id')
-            ->join('tt_detail_evaluasi as de', 'e.id', '=', 'de.evaluasi_id')
-            ->join('tm_kriteria as k', 'de.kriteria_id', '=', 'k.id')
-            ->join('model_has_roles as mr', 'u.id', '=', 'mr.model_id')
-            ->join('roles as r', 'mr.role_id', '=', 'r.id')
-            ->where('e.guru_id', $guruId)
-            ->where('e.periode_evaluasi_id', $periodeId)
-            ->where('r.name', 'siswa')  // Gunakan nama role, bukan ID
-            ->where('mr.model_type', 'App\\Models\\User')  // Pastikan tipe model benar
-            ->select(DB::raw('AVG(de.nilai) as nilai_rata'))
-            ->first();
+    // Hitung nilai dengan mempertimbangkan sub kriteria
+    $nilaiSiswa = DB::table('tt_evaluasi as e')
+        ->join('users as u', 'e.evaluator_id', '=', 'u.id')
+        ->join('tt_detail_evaluasi as de', 'e.id', '=', 'de.evaluasi_id')
+        ->join('tm_kriteria as k', 'de.kriteria_id', '=', 'k.id')
+        ->leftJoin('tm_sub_kriteria as sk', 'de.sub_kriteria_id', '=', 'sk.id')
+        ->join('model_has_roles as mr', 'u.id', '=', 'mr.model_id')
+        ->join('roles as r', 'mr.role_id', '=', 'r.id')
+        ->where('e.guru_id', $guruId)
+        ->where('e.periode_evaluasi_id', $periodeId)
+        ->where('r.name', 'siswa')
+        ->where('mr.model_type', 'App\\Models\\User')
+        ->select(DB::raw('
+            SUM(
+                de.nilai * 
+                CASE 
+                    WHEN de.sub_kriteria_id IS NOT NULL 
+                    THEN (k.bobot / 100) * (sk.bobot / 100)
+                    ELSE (k.bobot / 100)
+                END
+            ) / SUM(
+                CASE 
+                    WHEN de.sub_kriteria_id IS NOT NULL 
+                    THEN (k.bobot / 100) * (sk.bobot / 100)
+                    ELSE (k.bobot / 100)
+                END
+            ) as nilai_rata
+        '))
+        ->first();
 
-        // Debugging - cek nama role yang sebenarnya dan jumlah data
-        \Log::info("Mencari data evaluasi untuk guru_id: $guruId, periode_id: $periodeId");
+    $nilaiRekan = DB::table('tt_evaluasi as e')
+        ->join('users as u', 'e.evaluator_id', '=', 'u.id')
+        ->join('tt_detail_evaluasi as de', 'e.id', '=', 'de.evaluasi_id')
+        ->join('tm_kriteria as k', 'de.kriteria_id', '=', 'k.id')
+        ->leftJoin('tm_sub_kriteria as sk', 'de.sub_kriteria_id', '=', 'sk.id')
+        ->join('model_has_roles as mr', 'u.id', '=', 'mr.model_id')
+        ->join('roles as r', 'mr.role_id', '=', 'r.id')
+        ->where('e.guru_id', $guruId)
+        ->where('e.periode_evaluasi_id', $periodeId)
+        ->where('r.name', 'guru')
+        ->where('mr.model_type', 'App\\Models\\User')
+        ->select(DB::raw('
+            SUM(
+                de.nilai * 
+                CASE 
+                    WHEN de.sub_kriteria_id IS NOT NULL 
+                    THEN (k.bobot / 100) * (sk.bobot / 100)
+                    ELSE (k.bobot / 100)
+                END
+            ) / SUM(
+                CASE 
+                    WHEN de.sub_kriteria_id IS NOT NULL 
+                    THEN (k.bobot / 100) * (sk.bobot / 100)
+                    ELSE (k.bobot / 100)
+                END
+            ) as nilai_rata
+        '))
+        ->first();
 
-        // Cek apakah ada data evaluasi dari siswa
-        $countSiswa = DB::table('tt_evaluasi as e')
-            ->join('users as u', 'e.evaluator_id', '=', 'u.id')
-            ->join('model_has_roles as mr', 'u.id', '=', 'mr.model_id')
-            ->join('roles as r', 'mr.role_id', '=', 'r.id')
-            ->where('e.guru_id', $guruId)
-            ->where('e.periode_evaluasi_id', $periodeId)
-            ->where('r.name', 'siswa')
-            ->where('mr.model_type', 'App\\Models\\User')
-            ->count();
+    $nilaiPengawas = DB::table('tt_evaluasi as e')
+        ->join('users as u', 'e.evaluator_id', '=', 'u.id')
+        ->join('tt_detail_evaluasi as de', 'e.id', '=', 'de.evaluasi_id')
+        ->join('tm_kriteria as k', 'de.kriteria_id', '=', 'k.id')
+        ->leftJoin('tm_sub_kriteria as sk', 'de.sub_kriteria_id', '=', 'sk.id')
+        ->join('model_has_roles as mr', 'u.id', '=', 'mr.model_id')
+        ->join('roles as r', 'mr.role_id', '=', 'r.id')
+        ->where('e.guru_id', $guruId)
+        ->where('e.periode_evaluasi_id', $periodeId)
+        ->where(function ($query) {
+            $query->where('r.name', 'kepala_sekolah')
+                ->orWhere('r.name', 'kepsek');
+        })
+        ->where('mr.model_type', 'App\\Models\\User')
+        ->select(DB::raw('
+            SUM(
+                de.nilai * 
+                CASE 
+                    WHEN de.sub_kriteria_id IS NOT NULL 
+                    THEN (k.bobot / 100) * (sk.bobot / 100)
+                    ELSE (k.bobot / 100)
+                END
+            ) / SUM(
+                CASE 
+                    WHEN de.sub_kriteria_id IS NOT NULL 
+                    THEN (k.bobot / 100) * (sk.bobot / 100)
+                    ELSE (k.bobot / 100)
+                END
+            ) as nilai_rata
+        '))
+        ->first();
 
-        \Log::info("Jumlah evaluasi dari siswa: $countSiswa");
+    // Proses sama seperti sebelumnya
+    $configBobot = [
+        'siswa' => 30,
+        'rekan' => 30,
+        'pengawas' => 40,
+    ];
 
-        // Debug roles yang tersedia
-        $availableRoles = DB::table('roles')->pluck('name')->toArray();
-        \Log::info("Available roles: " . implode(", ", $availableRoles));
+    $nilai_siswa = $nilaiSiswa && $nilaiSiswa->nilai_rata !== null ? (float)$nilaiSiswa->nilai_rata : 0.0;
+    $nilai_rekan = $nilaiRekan && $nilaiRekan->nilai_rata !== null ? (float)$nilaiRekan->nilai_rata : 0.0;
+    $nilai_pengawas = $nilaiPengawas && $nilaiPengawas->nilai_rata !== null ? (float)$nilaiPengawas->nilai_rata : 0.0;
 
-        // Hitung nilai rata-rata dari rekan guru
-        $nilaiRekan = DB::table('tt_evaluasi as e')
-            ->join('users as u', 'e.evaluator_id', '=', 'u.id')
-            ->join('tt_detail_evaluasi as de', 'e.id', '=', 'de.evaluasi_id')
-            ->join('tm_kriteria as k', 'de.kriteria_id', '=', 'k.id')
-            ->join('model_has_roles as mr', 'u.id', '=', 'mr.model_id')
-            ->join('roles as r', 'mr.role_id', '=', 'r.id')
-            ->where('e.guru_id', $guruId)
-            ->where('e.periode_evaluasi_id', $periodeId)
-            ->where('r.name', 'guru')  // Gunakan nama role, bukan ID
-            ->where('mr.model_type', 'App\\Models\\User')  // Pastikan tipe model benar
-            ->select(DB::raw('AVG(de.nilai) as nilai_rata'))
-            ->first();
+    if ($nilai_siswa > 0 || $nilai_rekan > 0 || $nilai_pengawas > 0) {
+        $totalBobot = 0;
+        $nilai_akhir = 0;
 
-        // Hitung nilai rata-rata dari kepala sekolah
-        $nilaiPengawas = DB::table('tt_evaluasi as e')
-            ->join('users as u', 'e.evaluator_id', '=', 'u.id')
-            ->join('tt_detail_evaluasi as de', 'e.id', '=', 'de.evaluasi_id')
-            ->join('tm_kriteria as k', 'de.kriteria_id', '=', 'k.id')
-            ->join('model_has_roles as mr', 'u.id', '=', 'mr.model_id')
-            ->join('roles as r', 'mr.role_id', '=', 'r.id')
-            ->where('e.guru_id', $guruId)
-            ->where('e.periode_evaluasi_id', $periodeId)
-            ->where(function ($query) {
-                $query->where('r.name', 'kepala_sekolah')
-                    ->orWhere('r.name', 'kepsek'); // Coba nama alternatif
-            })
-            ->where('mr.model_type', 'App\\Models\\User')  // Pastikan tipe model benar
-            ->select(DB::raw('AVG(de.nilai) as nilai_rata'))
-            ->first();
-
-        // Ambil nilai dengan bobot sesuai konfigurasi
-        $configBobot = [
-            'siswa' => 30, // 30% dari nilai siswa
-            'rekan' => 30, // 30% dari nilai rekan
-            'pengawas' => 40, // 40% dari nilai kepala sekolah
-        ];
-
-        // PENTING: Pastikan nilai yang NULL dikonversi menjadi 0
-        $nilai_siswa = $nilaiSiswa && $nilaiSiswa->nilai_rata !== null ? (float)$nilaiSiswa->nilai_rata : 0.0;
-        $nilai_rekan = $nilaiRekan && $nilaiRekan->nilai_rata !== null ? (float)$nilaiRekan->nilai_rata : 0.0;
-        $nilai_pengawas = $nilaiPengawas && $nilaiPengawas->nilai_rata !== null ? (float)$nilaiPengawas->nilai_rata : 0.0;
-
-        \Log::info("Nilai yang dikalkulasi - Siswa: $nilai_siswa, Rekan: $nilai_rekan, Pengawas: $nilai_pengawas");
-
-        // Hanya hitung nilai akhir jika ada setidaknya satu nilai
-        if ($nilai_siswa > 0 || $nilai_rekan > 0 || $nilai_pengawas > 0) {
-            $totalBobot = 0;
-            $nilai_akhir = 0;
-
-            if ($nilai_siswa > 0) {
-                $nilai_akhir += ($nilai_siswa * $configBobot['siswa'] / 100);
-                $totalBobot += $configBobot['siswa'];
-            }
-
-            if ($nilai_rekan > 0) {
-                $nilai_akhir += ($nilai_rekan * $configBobot['rekan'] / 100);
-                $totalBobot += $configBobot['rekan'];
-            }
-
-            if ($nilai_pengawas > 0) {
-                $nilai_akhir += ($nilai_pengawas * $configBobot['pengawas'] / 100);
-                $totalBobot += $configBobot['pengawas'];
-            }
-
-            // Jika totalBobot kurang dari 100%, sesuaikan nilai akhir
-            if ($totalBobot > 0 && $totalBobot < 100) {
-                $nilai_akhir = $nilai_akhir * (100 / $totalBobot);
-            }
-        } else {
-            $nilai_akhir = 0;
+        if ($nilai_siswa > 0) {
+            $nilai_akhir += ($nilai_siswa * $configBobot['siswa'] / 100);
+            $totalBobot += $configBobot['siswa'];
         }
 
-        \Log::info("Nilai akhir: $nilai_akhir");
-
-        try {
-            // Update atau buat hasil evaluasi baru
-            if ($existingHasil) {
-                $existingHasil->nilai_siswa = $nilai_siswa;
-                $existingHasil->nilai_rekan = $nilai_rekan;
-                $existingHasil->nilai_pengawas = $nilai_pengawas;
-                $existingHasil->nilai_akhir = $nilai_akhir;
-                $existingHasil->save();
-                \Log::info("Updated existing hasil evaluasi with ID: {$existingHasil->id}");
-            } else {
-                // Gunakan create dengan explicit casting ke nilai non-null
-                $hasilEvaluasi = new HasilEvaluasi();
-                $hasilEvaluasi->guru_id = $guruId;
-                $hasilEvaluasi->periode_evaluasi_id = $periodeId;
-                $hasilEvaluasi->nilai_siswa = $nilai_siswa;
-                $hasilEvaluasi->nilai_rekan = $nilai_rekan;
-                $hasilEvaluasi->nilai_pengawas = $nilai_pengawas;
-                $hasilEvaluasi->nilai_akhir = $nilai_akhir;
-                $hasilEvaluasi->save();
-                \Log::info("Created new hasil evaluasi with ID: {$hasilEvaluasi->id}");
-            }
-
-            return true;
-        } catch (\Exception $e) {
-            \Log::error("Error saving hasil evaluasi: " . $e->getMessage());
-            throw $e;
+        if ($nilai_rekan > 0) {
+            $nilai_akhir += ($nilai_rekan * $configBobot['rekan'] / 100);
+            $totalBobot += $configBobot['rekan'];
         }
+
+        if ($nilai_pengawas > 0) {
+            $nilai_akhir += ($nilai_pengawas * $configBobot['pengawas'] / 100);
+            $totalBobot += $configBobot['pengawas'];
+        }
+
+        if ($totalBobot > 0 && $totalBobot < 100) {
+            $nilai_akhir = $nilai_akhir * (100 / $totalBobot);
+        }
+    } else {
+        $nilai_akhir = 0;
     }
+
+    try {
+        if ($existingHasil) {
+            $existingHasil->update([
+                'nilai_siswa' => $nilai_siswa,
+                'nilai_rekan' => $nilai_rekan,
+                'nilai_pengawas' => $nilai_pengawas,
+                'nilai_akhir' => $nilai_akhir,
+            ]);
+        } else {
+            HasilEvaluasi::create([
+                'guru_id' => $guruId,
+                'periode_evaluasi_id' => $periodeId,
+                'nilai_siswa' => $nilai_siswa,
+                'nilai_rekan' => $nilai_rekan,
+                'nilai_pengawas' => $nilai_pengawas,
+                'nilai_akhir' => $nilai_akhir,
+            ]);
+        }
+
+        return true;
+    } catch (\Exception $e) {
+        \Log::error("Error saving hasil evaluasi: " . $e->getMessage());
+        throw $e;
+    }
+}
 }

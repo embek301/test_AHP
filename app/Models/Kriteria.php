@@ -47,4 +47,11 @@ class Kriteria extends Model
     {
         return $this->hasMany(DetailEvaluasi::class, 'kriteria_id');
     }
+    /**
+ * Relasi ke sub kriteria
+ */
+    public function subKriteria(): HasMany
+    {
+        return $this->hasMany(SubKriteria::class, 'kriteria_id')->orderBy('urutan');
+    }
 }

@@ -85,163 +85,178 @@ class HasilEvaluasiController extends Controller
      * Menampilkan detail hasil evaluasi tertentu
      */
     public function show($id)
-    {
-        $user = Auth::user();
-        $guru = Guru::where('user_id', $user->id)->firstOrFail();
-        
-        // Ambil hasil evaluasi dan periode terkait
-        $hasilEvaluasi = HasilEvaluasi::findOrFail($id);
-        
-        // Pemeriksaan keamanan: pastikan guru hanya bisa melihat hasil evaluasinya sendiri
-        if ($hasilEvaluasi->guru_id !== $guru->id) {
-            return redirect()->route('hasil-evaluasi-saya.index')
-                ->with('error', 'Anda tidak memiliki akses untuk melihat hasil evaluasi ini');
-        }
-        
-        $periodeEvaluasi = PeriodeEvaluasi::findOrFail($hasilEvaluasi->periode_evaluasi_id);
-        
-        // Dapatkan detail penilaian berdasarkan kategori
-        $detailKategori = $this->getDetailKategoriPenilaian($guru->id, $periodeEvaluasi->id);
-        
-        // Dapatkan riwayat nilai untuk periode-periode sebelumnya
-        $riwayatNilai = HasilEvaluasi::where('guru_id', $guru->id)
-            ->join('tt_periode_evaluasi', 'tt_hasil_evaluasi.periode_evaluasi_id', '=', 'tt_periode_evaluasi.id')
-            ->select(
-                'tt_periode_evaluasi.id as periode_id',
-                'tt_periode_evaluasi.judul as periode_judul',
-                'tt_hasil_evaluasi.nilai_akhir',
-                'tt_periode_evaluasi.tanggal_selesai'
-            )
-            ->orderBy('tt_periode_evaluasi.tanggal_selesai', 'desc')
-            ->get();
-        
-        // Cek apakah ada rekomendasi untuk guru ini pada periode ini
-        $rekomendasi = Rekomendasi::where('guru_id', $guru->id)
-            ->where('periode_evaluasi_id', $periodeEvaluasi->id)
-            ->first();
-        
-        return Inertia::render('Guru/HasilEvaluasi/Show', [
-            'hasilEvaluasi' => $hasilEvaluasi,
-            'periodeEvaluasi' => $periodeEvaluasi,
-            'profileGuru' => $guru->load(['user', 'mataPelajaran']),
-            'detailKategori' => $detailKategori,
-            'riwayatNilai' => $riwayatNilai,
-            'rekomendasi' => $rekomendasi,
-        ]);
+{
+    $user = Auth::user();
+    $guru = Guru::where('user_id', $user->id)->firstOrFail();
+    
+    $hasilEvaluasi = HasilEvaluasi::findOrFail($id);
+    
+    if ($hasilEvaluasi->guru_id !== $guru->id) {
+        return redirect()->route('hasil-evaluasi-saya.index')
+            ->with('error', 'Anda tidak memiliki akses untuk melihat hasil evaluasi ini');
     }
     
-    /**
-     * Mengambil detail kategori penilaian untuk guru pada periode tertentu
-     */
-    private function getDetailKategoriPenilaian($guruId, $periodeId)
-    {
-        // Ambil semua kriteria yang dikelompokkan berdasarkan kategori
-        $kriteria = Kriteria::where('aktif', true)
-            ->orderBy('kategori')
-            ->orderBy('nama')
-            ->get();
+    // Cast numeric values explicitly
+    $hasilEvaluasi->nilai_siswa = $hasilEvaluasi->nilai_siswa !== null ? (float) $hasilEvaluasi->nilai_siswa : null;
+    $hasilEvaluasi->nilai_rekan = $hasilEvaluasi->nilai_rekan !== null ? (float) $hasilEvaluasi->nilai_rekan : null;
+    $hasilEvaluasi->nilai_pengawas = $hasilEvaluasi->nilai_pengawas !== null ? (float) $hasilEvaluasi->nilai_pengawas : null;
+    $hasilEvaluasi->nilai_akhir = $hasilEvaluasi->nilai_akhir !== null ? (float) $hasilEvaluasi->nilai_akhir : null;
+    
+    $periodeEvaluasi = PeriodeEvaluasi::findOrFail($hasilEvaluasi->periode_evaluasi_id);
+    
+    $detailKategori = $this->getDetailKategoriPenilaian($guru->id, $periodeEvaluasi->id);
+    
+    $riwayatNilai = HasilEvaluasi::where('guru_id', $guru->id)
+        ->join('tt_periode_evaluasi', 'tt_hasil_evaluasi.periode_evaluasi_id', '=', 'tt_periode_evaluasi.id')
+        ->select(
+            'tt_periode_evaluasi.id as periode_id',
+            'tt_periode_evaluasi.judul as periode_judul',
+            'tt_hasil_evaluasi.nilai_akhir',
+            'tt_periode_evaluasi.tanggal_selesai'
+        )
+        ->orderBy('tt_periode_evaluasi.tanggal_selesai', 'desc')
+        ->get()
+        ->map(function ($item) {
+            $item->nilai_akhir = $item->nilai_akhir !== null ? (float) $item->nilai_akhir : null;
+            return $item;
+        });
+    
+    $rekomendasi = Rekomendasi::where('guru_id', $guru->id)
+        ->where('periode_evaluasi_id', $periodeEvaluasi->id)
+        ->first();
+    
+    return Inertia::render('Guru/HasilEvaluasi/Show', [
+        'hasilEvaluasi' => $hasilEvaluasi,
+        'periodeEvaluasi' => $periodeEvaluasi,
+        'profileGuru' => $guru->load(['user', 'mataPelajaran']),
+        'detailKategori' => $detailKategori,
+        'riwayatNilai' => $riwayatNilai,
+        'rekomendasi' => $rekomendasi,
+    ]);
+}
+ /**
+ * Mengambil detail kategori penilaian untuk guru pada periode tertentu
+ */
+/**
+ * Mengambil detail kategori penilaian untuk guru pada periode tertentu
+ */
+private function getDetailKategoriPenilaian($guruId, $periodeId)
+{
+    // Ambil semua kriteria utama dengan sub kriteria
+    $kriteriaList = Kriteria::where('aktif', true)
+        ->with(['subKriteria' => function ($query) {
+            $query->where('aktif', true)->orderBy('urutan');
+        }])
+        ->orderBy('nama')
+        ->get();
+    
+    // Ambil evaluasi dari tiga sumber: siswa, rekan, dan kepala sekolah
+    $evaluasiSiswa = Evaluasi::where('guru_id', $guruId)
+        ->where('periode_evaluasi_id', $periodeId)
+        ->whereHas('evaluator', function ($query) {
+            $query->whereHas('roles', function ($q) {
+                $q->where('name', 'siswa');
+            });
+        })
+        ->with('detailEvaluasi')
+        ->get();
+    
+    $evaluasiRekan = Evaluasi::where('guru_id', $guruId)
+        ->where('periode_evaluasi_id', $periodeId)
+        ->whereHas('evaluator', function ($query) {
+            $query->whereHas('roles', function ($q) {
+                $q->where('name', 'guru');
+            });
+        })
+        ->with('detailEvaluasi')
+        ->get();
+    
+    $evaluasiKepsek = Evaluasi::where('guru_id', $guruId)
+        ->where('periode_evaluasi_id', $periodeId)
+        ->whereHas('evaluator', function ($query) {
+            $query->whereHas('roles', function ($q) {
+                $q->where('name', 'kepala_sekolah');
+            });
+        })
+        ->with('detailEvaluasi')
+        ->get();
+    
+    // Hasil pengelompokan
+    $hasil = [];
+    
+    // Iterasi untuk setiap kriteria utama
+    foreach ($kriteriaList as $kriteria) {
+        $subKriteriaDetail = [];
+        $totalRataRataKriteria = 0;
+        $jumlahSubKriteria = 0;
         
-        // Group kriteria berdasarkan kategori
-        $kategoriKriteria = $kriteria->groupBy('kategori');
-        
-        // Ambil evaluasi dari tiga sumber: siswa, rekan, dan kepala sekolah
-        $evaluasiSiswa = Evaluasi::where('guru_id', $guruId)
-            ->where('periode_evaluasi_id', $periodeId)
-            ->whereHas('evaluator', function ($query) {
-                $query->whereHas('roles', function ($q) {
-                    $q->where('name', 'siswa');
-                });
-            })
-            ->with('detailEvaluasi')
-            ->get();
-        
-        $evaluasiRekan = Evaluasi::where('guru_id', $guruId)
-            ->where('periode_evaluasi_id', $periodeId)
-            ->whereHas('evaluator', function ($query) {
-                $query->whereHas('roles', function ($q) {
-                    $q->where('name', 'guru');
-                });
-            })
-            ->with('detailEvaluasi')
-            ->get();
-        
-        $evaluasiKepsek = Evaluasi::where('guru_id', $guruId)
-            ->where('periode_evaluasi_id', $periodeId)
-            ->whereHas('evaluator', function ($query) {
-                $query->whereHas('roles', function ($q) {
-                    $q->where('name', 'kepala_sekolah');
-                });
-            })
-            ->with('detailEvaluasi')
-            ->get();
-        
-        // Hasil pengelompokan
-        $hasil = [];
-        
-        // Iterasi untuk setiap kategori
-        foreach ($kategoriKriteria as $kategori => $kriteriaList) {
-            $kriteriaDetail = [];
-            $totalRataRataKategori = 0;
+        // Iterasi untuk setiap sub kriteria
+        foreach ($kriteria->subKriteria as $subKriteria) {
+            $nilaiSiswa = $this->hitungRataRataNilaiSubKriteria($evaluasiSiswa, $subKriteria->id);
+            $nilaiRekan = $this->hitungRataRataNilaiSubKriteria($evaluasiRekan, $subKriteria->id);
+            $nilaiPengawas = $this->hitungRataRataNilaiSubKriteria($evaluasiKepsek, $subKriteria->id);
             
-            // Iterasi untuk setiap kriteria dalam kategori
-            foreach ($kriteriaList as $k) {
-                $nilaiSiswa = $this->hitungRataRataNilaiKriteria($evaluasiSiswa, $k->id);
-                $nilaiRekan = $this->hitungRataRataNilaiKriteria($evaluasiRekan, $k->id);
-                $nilaiPengawas = $this->hitungRataRataNilaiKriteria($evaluasiKepsek, $k->id);
-                
-                // Hitung rata-rata dari ketiga sumber
-                $nilai = [];
-                if ($nilaiSiswa !== null) $nilai[] = $nilaiSiswa;
-                if ($nilaiRekan !== null) $nilai[] = $nilaiRekan;
-                if ($nilaiPengawas !== null) $nilai[] = $nilaiPengawas;
-                
-                $nilaiRataRata = count($nilai) > 0 ? array_sum($nilai) / count($nilai) : 0;
-                $totalRataRataKategori += $nilaiRataRata;
-                
-                $kriteriaDetail[] = [
-                    'id' => $k->id,
-                    'nama' => $k->nama,
-                    'deskripsi' => $k->deskripsi,
-                    'nilai_siswa' => $nilaiSiswa,
-                    'nilai_rekan' => $nilaiRekan,
-                    'nilai_pengawas' => $nilaiPengawas,
-                    'nilai_rata_rata' => $nilaiRataRata,
-                ];
+            // Hitung rata-rata dari ketiga sumber
+            $nilai = [];
+            if ($nilaiSiswa !== null) $nilai[] = (float) $nilaiSiswa;
+            if ($nilaiRekan !== null) $nilai[] = (float) $nilaiRekan;
+            if ($nilaiPengawas !== null) $nilai[] = (float) $nilaiPengawas;
+            
+            $nilaiRataRata = count($nilai) > 0 ? array_sum($nilai) / count($nilai) : 0;
+            
+            if ($nilaiRataRata > 0) {
+                $totalRataRataKriteria += $nilaiRataRata;
+                $jumlahSubKriteria++;
             }
             
-            $rataRataKategori = count($kriteriaList) > 0 ? $totalRataRataKategori / count($kriteriaList) : 0;
-            
-            $hasil[] = [
-                'id' => count($hasil) + 1,
-                'kategori' => $kategori,
-                'rata_rata' => $rataRataKategori,
-                'kriteria' => $kriteriaDetail,
+            $subKriteriaDetail[] = [
+                'id' => $subKriteria->id,
+                'nama' => $subKriteria->nama,
+                'deskripsi' => $subKriteria->deskripsi,
+                'urutan' => $subKriteria->urutan,
+                'bobot' => (float) $subKriteria->bobot,
+                'nilai_siswa' => $nilaiSiswa !== null ? (float) $nilaiSiswa : null,
+                'nilai_rekan' => $nilaiRekan !== null ? (float) $nilaiRekan : null,
+                'nilai_pengawas' => $nilaiPengawas !== null ? (float) $nilaiPengawas : null,
+                'nilai_rata_rata' => (float) $nilaiRataRata,
             ];
         }
         
-        // Urutkan kategori berdasarkan rata-rata nilai (dari tinggi ke rendah)
-        usort($hasil, function ($a, $b) {
-            return $b['rata_rata'] <=> $a['rata_rata'];
-        });
+        $rataRataKriteria = $jumlahSubKriteria > 0 ? $totalRataRataKriteria / $jumlahSubKriteria : 0;
         
-        return $hasil;
+        $hasil[] = [
+            'id' => $kriteria->id,
+            'kategori' => $kriteria->nama,
+            'deskripsi' => $kriteria->deskripsi,
+            'rata_rata' => (float) $rataRataKriteria,
+            'kriteria' => $subKriteriaDetail, // These are sub-criteria
+        ];
     }
     
-    /**
-     * Menghitung rata-rata nilai untuk kriteria tertentu dari kumpulan evaluasi
-     */
-    private function hitungRataRataNilaiKriteria($evaluasi, $kriteriaId)
-    {
-        $nilai = [];
-        
-        foreach ($evaluasi as $e) {
-            foreach ($e->detailEvaluasi as $detail) {
-                if ($detail->kriteria_id === $kriteriaId) {
-                    $nilai[] = $detail->nilai;
-                }
+    // Urutkan berdasarkan rata-rata nilai (dari tinggi ke rendah)
+    usort($hasil, function ($a, $b) {
+        return $b['rata_rata'] <=> $a['rata_rata'];
+    });
+    
+    return $hasil;
+}
+
+/**
+ * Menghitung rata-rata nilai untuk sub kriteria tertentu dari kumpulan evaluasi
+ */
+private function hitungRataRataNilaiSubKriteria($evaluasi, $subKriteriaId)
+{
+    $nilai = [];
+    
+    foreach ($evaluasi as $e) {
+        foreach ($e->detailEvaluasi as $detail) {
+            if ($detail->sub_kriteria_id === $subKriteriaId) {
+                $nilai[] = (float) $detail->nilai;
             }
         }
-        
-        return count($nilai) > 0 ? array_sum($nilai) / count($nilai) : null;
     }
+    
+    return count($nilai) > 0 ? array_sum($nilai) / count($nilai) : null;
+}
+
 }

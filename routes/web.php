@@ -12,17 +12,14 @@ use App\Http\Controllers\PeriodeEvaluasiController;
 use App\Http\Controllers\RekomendasiController;
 use App\Http\Controllers\SiswaController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\SubKriteriaController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-
-
-
 
 Route::redirect('/', '/dashboard')->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-
 
     Route::prefix('hasil-evaluasi')->group(function () {
         Route::get('', [HasilEvaluasiController::class, 'index'])->name('hasil-evaluasi.index');
@@ -32,7 +29,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
     Route::get('/hasil-evaluasi/{hasilEvaluasi}/export', [HasilEvaluasiController::class, 'export'])->name('hasil-evaluasi.export');
     Route::get('/hasil-evaluasi/export-all', [HasilEvaluasiController::class, 'exportAll'])->name('hasil-evaluasi.export-all');
-
 
     Route::prefix('guru')->group(function () {
         Route::get('', [GuruController::class, 'index'])->name('guru.index');
@@ -77,8 +73,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::delete('/{mataPelajaran}', [MataPelajaranController::class, 'destroy'])->name('mata-pelajaran.destroy');
             });
 
-
-
             Route::prefix('periode-evaluasi')->group(function () {
                 Route::get('', [PeriodeEvaluasiController::class, 'index'])->name('periode-evaluasi.index');
                 Route::post('', [PeriodeEvaluasiController::class, 'store'])->name('periode-evaluasi.store');
@@ -88,15 +82,25 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/{periodeEvaluasi}/summary', [PeriodeEvaluasiController::class, 'getSummary'])->name('periode-evaluasi.summary');
             });
 
-            Route::prefix('kriteria')->group(function () {
-                Route::get('', [KriteriaController::class, 'index'])->name('kriteria.index');
-                Route::post('', [KriteriaController::class, 'store'])->name('kriteria.store');
-                Route::put('/{kriteria}', [KriteriaController::class, 'update'])->name('kriteria.update');
-                Route::put('/{kriteria}/toggle-active', [KriteriaController::class, 'toggleActive'])->name('kriteria.toggle-active');
-                Route::delete('/{kriteria}', [KriteriaController::class, 'destroy'])->name('kriteria.destroy');
+            Route::prefix('kriteria')->name('kriteria.')->group(function () {
+                Route::get('', [KriteriaController::class, 'index'])->name('index');
+                Route::post('', [KriteriaController::class, 'store'])->name('store');
+                Route::put('/{kriteria}', [KriteriaController::class, 'update'])->name('update');
+                Route::put('/{kriteria}/toggle-active', [KriteriaController::class, 'toggleActive'])->name('toggle-active');
+                Route::delete('/{kriteria}', [KriteriaController::class, 'destroy'])->name('destroy');
+                
+                // SUB KRITERIA ROUTES (nested under kriteria)
+                Route::prefix('{kriteria}/sub-kriteria')->name('sub-kriteria.')->group(function () {
+                    Route::get('', [SubKriteriaController::class, 'index'])->name('index');
+                    Route::post('', [SubKriteriaController::class, 'store'])->name('store');
+                    Route::put('/{subKriteria}', [SubKriteriaController::class, 'update'])->name('update');
+                    Route::put('/{subKriteria}/toggle-active', [SubKriteriaController::class, 'toggleActive'])->name('toggle-active');
+                    Route::delete('/{subKriteria}', [SubKriteriaController::class, 'destroy'])->name('destroy');
+                    Route::post('/update-urutan', [SubKriteriaController::class, 'updateUrutan'])->name('update-urutan');
+                });
             });
-        });
-    });
+        }); // Penutup admin prefix
+    }); // Penutup role:admin middleware
 
     Route::middleware(['role:kepala_sekolah'])->group(function () {
         Route::prefix('kepsek')->group(function () {
@@ -121,26 +125,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
         });
     });
 
-
     Route::middleware(['role:guru'])->group(function () {
         Route::get('/evaluasi-rekan', [EvaluasiRekanController::class, 'index'])
             ->name('evaluasi-rekan.index');
-
         Route::get('/evaluasi-rekan/create/{guruId}', [EvaluasiRekanController::class, 'create'])
             ->name('evaluasi-rekan.create');
-
         Route::post('/evaluasi-rekan', [EvaluasiRekanController::class, 'store'])
             ->name('evaluasi-rekan.store');
-
         Route::get('/evaluasi-rekan/{id}', [EvaluasiRekanController::class, 'show'])
             ->name('evaluasi-rekan.show');
-
         Route::get('/evaluasi-rekan/{id}/edit', [EvaluasiRekanController::class, 'edit'])
             ->name('evaluasi-rekan.edit');
-
         Route::put('/evaluasi-rekan/{id}', [EvaluasiRekanController::class, 'update'])
             ->name('evaluasi-rekan.update');
-
         Route::get('/hasil-evaluasi-saya', [App\Http\Controllers\Guru\HasilEvaluasiController::class, 'index'])
             ->name('hasil-evaluasi-saya.index');
         Route::get('/hasil-evaluasi-saya/{id}', [App\Http\Controllers\Guru\HasilEvaluasiController::class, 'show'])
@@ -157,7 +154,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/{id}/export', [App\Http\Controllers\Siswa\EvaluasiGuruController::class, 'export'])->name('export');
         Route::get('/guru/{guruId}', [App\Http\Controllers\Siswa\EvaluasiGuruController::class, 'viewByGuru'])->name('view-by-guru');
     });
-});
+}); // Penutup auth middleware
 
 require __DIR__ . '/settings.php';
 require __DIR__ . '/auth.php';

@@ -25,10 +25,10 @@ interface HasilEvaluasi {
     id: number;
     guru_id: number;
     periode_evaluasi_id: number;
-    nilai_siswa: number | null;
-    nilai_rekan: number | null;
-    nilai_pengawas: number | null;
-    nilai_akhir: number | null;
+    nilai_siswa: number | string | null;
+    nilai_rekan: number | string | null;
+    nilai_pengawas: number | string | null;
+    nilai_akhir: number | string | null;
     periode_evaluasi: {
         id: number;
         judul: string;
@@ -93,9 +93,11 @@ export default function HasilEvaluasiIndex({
         }
     }, [message, error]);
 
-    const formatNilai = (nilai: number | null): string => {
-        if (nilai === null) return '-';
-        return nilai.toFixed(2);
+    // ✅ Perbaikan fungsi formatNilai agar tidak error toFixed
+    const formatNilai = (nilai: number | string | null): string => {
+        if (nilai === null || nilai === undefined || nilai === '') return '-';
+        const num = Number(nilai);
+        return isNaN(num) ? '-' : num.toFixed(2);
     };
 
     // Fungsi untuk menentukan warna badge berdasarkan status
@@ -291,16 +293,16 @@ export default function HasilEvaluasiIndex({
                                                 {hasil.nilai_akhir !== null ? (
                                                     <span
                                                         className={`rounded-md px-2 py-1 ${
-                                                            hasil.nilai_akhir >= 4
+                                                            Number(hasil.nilai_akhir) >= 4
                                                                 ? 'bg-green-100 text-green-800'
-                                                                : hasil.nilai_akhir >= 3
+                                                                : Number(hasil.nilai_akhir) >= 3
                                                                 ? 'bg-blue-100 text-blue-800'
-                                                                : hasil.nilai_akhir >= 2
+                                                                : Number(hasil.nilai_akhir) >= 2
                                                                 ? 'bg-amber-100 text-amber-800'
                                                                 : 'bg-red-100 text-red-800'
                                                         }`}
                                                     >
-                                                        {hasil.nilai_akhir.toFixed(2)}
+                                                        {formatNilai(hasil.nilai_akhir)}
                                                     </span>
                                                 ) : (
                                                     '-'
@@ -335,7 +337,7 @@ export default function HasilEvaluasiIndex({
                                 <div>
                                     <p className="text-sm font-medium">Ada periode evaluasi yang sedang aktif</p>
                                     <p className="text-xs text-gray-500">
-                                        Liburan hasil evaluasi akan tersedia setelah periode evaluasi selesai
+                                        Laporan hasil evaluasi akan tersedia setelah periode evaluasi selesai
                                     </p>
                                 </div>
                                 <Button variant="outline" size="sm" asChild>
