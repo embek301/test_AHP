@@ -118,7 +118,7 @@ class AllHasilEvaluasiExport implements FromCollection, WithHeadings, WithMappin
         $emailGuru = 'N/A';
         
         if ($hasil->guru) {
-            $nip = $hasil->guru->nip ?? 'N/A'; // Tidak perlu prefix apostrof karena sudah diformat di columnFormats
+            $nip = $hasil->guru->nip ?? 'N/A';
             if ($hasil->guru->user) {
                 $namaGuru = $hasil->guru->user->name ?? 'N/A';
                 $emailGuru = $hasil->guru->user->email ?? 'N/A';
