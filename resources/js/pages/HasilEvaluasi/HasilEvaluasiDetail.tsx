@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -8,8 +8,19 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Award, FileSpreadsheet, GraduationCap, Users } from 'lucide-react';
 
+interface SubKriteriaDetail {
+    id?: number;
+    sub_kriteria_id: number;
+    sub_kriteria_nama: string;
+    sub_kriteria_bobot: number;
+    nilai_rata_siswa: number;
+    nilai_rata_rekan: number;
+    nilai_pengawas: number;
+    nilai_rata_akhir: number;
+}
+
 interface DetailKriteria {
-    id: number;
+    id?: number;
     kriteria_id: number;
     kriteria_nama: string;
     kriteria_bobot: number;
@@ -17,6 +28,7 @@ interface DetailKriteria {
     nilai_rata_rekan: number;
     nilai_pengawas: number;
     nilai_rata_akhir: number;
+    sub_kriteria?: SubKriteriaDetail[];
 }
 
 interface DetailHasilEvaluasi {
@@ -74,6 +86,7 @@ export default function HasilEvaluasiDetail({ hasilId, guruId, periodeId }: Hasi
                     throw new Error('Failed to fetch detail data');
                 }
                 const data = await response.json();
+                console.log('Fetched data:', data); // Debug log
                 setDetailData(data);
             } catch (error) {
                 console.error('Error fetching detail:', error);
@@ -88,10 +101,7 @@ export default function HasilEvaluasiDetail({ hasilId, guruId, periodeId }: Hasi
 
     const handleExportDirect = (hasilId: number) => {
         try {
-            // Langsung redirect ke URL export tanpa menggunakan Axios
             window.location.href = route('hasil-evaluasi.export', hasilId);
-
-            // Optional: bisa tambahkan toast info
             toast.info('Memulai download...');
         } catch (error) {
             console.error('Export error:', error);
@@ -99,7 +109,6 @@ export default function HasilEvaluasiDetail({ hasilId, guruId, periodeId }: Hasi
         }
     };
 
-    // Helper function untuk mendapatkan kategori nilai
     const getNilaiCategory = (
         nilai: number,
     ): {
@@ -152,7 +161,6 @@ export default function HasilEvaluasiDetail({ hasilId, guruId, periodeId }: Hasi
         }
     };
 
-    // Render loading state
     if (isLoading) {
         return (
             <div className="space-y-4">
@@ -171,7 +179,6 @@ export default function HasilEvaluasiDetail({ hasilId, guruId, periodeId }: Hasi
         );
     }
 
-    // Render error state
     if (!detailData) {
         return (
             <div className="p-4 text-center">
@@ -180,12 +187,10 @@ export default function HasilEvaluasiDetail({ hasilId, guruId, periodeId }: Hasi
         );
     }
 
-    // Calculate nilai category
     const nilaiAkhirCategory = getNilaiCategory(detailData.hasil.nilai_akhir);
 
     return (
         <div className="space-y-4">
-            {/* Header dengan info dasar - lebih compact */}
             <div className="flex flex-col justify-between gap-3 md:flex-row">
                 <div>
                     <h3 className="text-lg font-bold">{detailData.guru.user.name}</h3>
@@ -203,7 +208,6 @@ export default function HasilEvaluasiDetail({ hasilId, guruId, periodeId }: Hasi
 
             <Separator />
 
-            {/* Ringkasan nilai - grid 2x2 untuk menghemat ruang */}
             <div className="grid grid-cols-2 gap-3">
                 <Card className={`${nilaiAkhirCategory.bgColor} p-3`}>
                     <div className="flex flex-col items-center justify-center">
@@ -244,12 +248,10 @@ export default function HasilEvaluasiDetail({ hasilId, guruId, periodeId }: Hasi
                 </Card>
             </div>
 
-            {/* Tabs untuk berbagai kategori detail - lebih compact */}
             <Tabs defaultValue="kriteria" className="mt-4">
                 <TabsList className="mb-3 grid grid-cols-2">
                     <TabsTrigger value="kriteria" className="text-xs">Detail Kriteria</TabsTrigger>
                     <TabsTrigger value="komentar" className="text-xs">Komentar</TabsTrigger>
-                    {/* <TabsTrigger value="grafik" className="text-xs">Grafik</TabsTrigger> */}
                 </TabsList>
 
                 <TabsContent value="kriteria" className="p-0">
@@ -259,44 +261,75 @@ export default function HasilEvaluasiDetail({ hasilId, guruId, periodeId }: Hasi
                             <CardDescription className="text-xs">Rincian nilai berdasarkan masing-masing kriteria evaluasi</CardDescription>
                         </CardHeader>
                         <CardContent className="pt-0">
-                            <div className="max-h-60 overflow-y-auto">
-                                <table className="w-full text-xs">
-                                    <thead>
-                                        <tr className="border-b">
-                                            <th className="py-2 text-left font-medium">Kriteria</th>
-                                            <th className="py-2 text-center font-medium">Bobot</th>
-                                            <th className="py-2 text-center font-medium">Siswa</th>
-                                            <th className="py-2 text-center font-medium">Rekan</th>
-                                            <th className="py-2 text-center font-medium">Pengawas</th>
-                                            <th className="py-2 text-right font-medium">Nilai Akhir</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {detailData.detail_kriteria.map((kriteria, index) => {
-                                            const kategoriNilai = getNilaiCategory(kriteria.nilai_rata_akhir);
+                            {detailData.detail_kriteria && detailData.detail_kriteria.length > 0 ? (
+                                <div className="max-h-96 overflow-y-auto">
+                                    <table className="w-full text-xs">
+                                        <thead className="sticky top-0 bg-white z-10 shadow-sm">
+                                            <tr className="border-b-2">
+                                                <th className="py-2 px-2 text-left font-medium bg-white">Kriteria</th>
+                                                <th className="py-2 px-2 text-center font-medium bg-white">Bobot</th>
+                                                <th className="py-2 px-2 text-center font-medium bg-white">Siswa</th>
+                                                <th className="py-2 px-2 text-center font-medium bg-white">Rekan</th>
+                                                <th className="py-2 px-2 text-center font-medium bg-white">Pengawas</th>
+                                                <th className="py-2 px-2 text-right font-medium bg-white">Nilai Akhir</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {detailData.detail_kriteria.map((kriteria, index) => {
+                                                const kategoriNilai = getNilaiCategory(kriteria.nilai_rata_akhir || 0);
+                                                const hasSubKriteria = kriteria.sub_kriteria && kriteria.sub_kriteria.length > 0;
 
-                                            return (
-                                                <tr key={index} className="border-b hover:bg-gray-50">
-                                                    <td className="py-2">
-                                                        <div className="font-medium">{kriteria.kriteria_nama}</div>
-                                                    </td>
-                                                    <td className="py-2 text-center">{Number(kriteria.kriteria_bobot).toFixed(1)}%</td>
-                                                    <td className="py-2 text-center">{Number(kriteria.nilai_rata_siswa).toFixed(1)}</td>
-                                                    <td className="py-2 text-center">{Number(kriteria.nilai_rata_rekan).toFixed(1)}</td>
-                                                    <td className="py-2 text-center">{Number(kriteria.nilai_pengawas).toFixed(1)}</td>
-                                                    <td className="py-2 text-right">
-                                                        <span
-                                                            className={`rounded px-1.5 py-0.5 text-xs ${kategoriNilai.bgColor} ${kategoriNilai.textColor}`}
-                                                        >
-                                                            {Number(kriteria.nilai_rata_akhir).toFixed(1)}
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
+                                                return (
+                                                    <React.Fragment key={`kriteria-${kriteria.kriteria_id}-${index}`}>
+                                                        <tr className={`border-b hover:bg-gray-50 ${hasSubKriteria ? 'bg-blue-50/30' : ''}`}>
+                                                            <td className="py-2 px-2">
+                                                                <div className="font-semibold text-gray-900">{kriteria.kriteria_nama}</div>
+                                                            </td>
+                                                            <td className="py-2 px-2 text-center font-semibold">{Number(kriteria.kriteria_bobot).toFixed(1)}%</td>
+                                                            <td className="py-2 px-2 text-center font-semibold">{Number(kriteria.nilai_rata_siswa || 0).toFixed(1)}</td>
+                                                            <td className="py-2 px-2 text-center font-semibold">{Number(kriteria.nilai_rata_rekan || 0).toFixed(1)}</td>
+                                                            <td className="py-2 px-2 text-center font-semibold">{Number(kriteria.nilai_pengawas || 0).toFixed(1)}</td>
+                                                            <td className="py-2 px-2 text-right">
+                                                                <span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${kategoriNilai.bgColor} ${kategoriNilai.textColor}`}>
+                                                                    {Number(kriteria.nilai_rata_akhir || 0).toFixed(1)}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                        
+                                                        {hasSubKriteria && kriteria.sub_kriteria!.map((subKriteria, subIndex) => {
+                                                            const subKategoriNilai = getNilaiCategory(subKriteria.nilai_rata_akhir || 0);
+                                                            
+                                                            return (
+                                                                <tr key={`sub-${subKriteria.sub_kriteria_id}-${subIndex}`} className="border-b hover:bg-gray-50 bg-gray-50/50">
+                                                                    <td className="py-2 px-2 pl-8">
+                                                                        <div className="flex items-start">
+                                                                            <span className="mr-2 text-gray-400">└─</span>
+                                                                            <span className="text-gray-700">{subKriteria.sub_kriteria_nama}</span>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="py-2 px-2 text-center text-gray-600">{Number(subKriteria.sub_kriteria_bobot).toFixed(1)}%</td>
+                                                                    <td className="py-2 px-2 text-center text-gray-700">{Number(subKriteria.nilai_rata_siswa || 0).toFixed(1)}</td>
+                                                                    <td className="py-2 px-2 text-center text-gray-700">{Number(subKriteria.nilai_rata_rekan || 0).toFixed(1)}</td>
+                                                                    <td className="py-2 px-2 text-center text-gray-700">{Number(subKriteria.nilai_pengawas || 0).toFixed(1)}</td>
+                                                                    <td className="py-2 px-2 text-right">
+                                                                        <span className={`rounded px-1.5 py-0.5 text-xs ${subKategoriNilai.bgColor} ${subKategoriNilai.textColor}`}>
+                                                                            {Number(subKriteria.nilai_rata_akhir || 0).toFixed(1)}
+                                                                        </span>
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                    </React.Fragment>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : (
+                                <div className="py-8 text-center text-sm text-gray-500">
+                                    Tidak ada data kriteria tersedia
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -371,20 +404,6 @@ export default function HasilEvaluasiDetail({ hasilId, guruId, periodeId }: Hasi
                                         <p className="text-xs text-muted-foreground">Tidak ada komentar dari pengawas.</p>
                                     )}
                                 </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                <TabsContent value="grafik" className="p-0">
-                    <Card>
-                        <CardHeader className="pb-3">
-                            <CardTitle className="text-sm">Visualisasi Nilai</CardTitle>
-                            <CardDescription className="text-xs">Grafik perbandingan nilai per kriteria dan sumber evaluasi</CardDescription>
-                        </CardHeader>
-                        <CardContent className="pt-0">
-                            <div className="flex h-[200px] items-center justify-center text-gray-500 text-xs">
-                                <p>Grafik visualisasi akan ditampilkan di sini.</p>
                             </div>
                         </CardContent>
                     </Card>

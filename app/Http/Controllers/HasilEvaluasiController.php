@@ -175,40 +175,149 @@ class HasilEvaluasiController extends Controller
     /**
      * Get detail evaluasi per kriteria.
      */
-    private function getDetailKriteria($guruId, $periodeId)
-    {
-        // Get all evaluations for this guru in this period
-        $evaluasiIds = Evaluasi::where('guru_id', $guruId)
-            ->where('periode_evaluasi_id', $periodeId)
-            ->pluck('id')
-            ->toArray();
+   private function getDetailKriteria($guruId, $periodeId)
+{
+    // Get all evaluations for this guru in this period
+    $evaluasiIds = Evaluasi::where('guru_id', $guruId)
+        ->where('periode_evaluasi_id', $periodeId)
+        ->pluck('id')
+        ->toArray();
 
-        if (empty($evaluasiIds)) {
-            return [];
+    if (empty($evaluasiIds)) {
+        return [];
+    }
+
+    // Query untuk mendapatkan semua kriteria yang pernah dievaluasi
+    $allKriteriaIds = DB::table('tt_detail_evaluasi')
+        ->whereIn('evaluasi_id', $evaluasiIds)
+        ->distinct()
+        ->pluck('kriteria_id')
+        ->toArray();
+
+    if (empty($allKriteriaIds)) {
+        return [];
+    }
+
+    $result = [];
+
+    foreach ($allKriteriaIds as $kriteriaId) {
+        // Ambil info kriteria
+        $kriteria = DB::table('tm_kriteria')
+            ->where('id', $kriteriaId)
+            ->first();
+
+        if (!$kriteria) {
+            continue;
         }
 
-        // Query to get aggregated data per kriteria
-        return DB::table('tt_detail_evaluasi')
-            ->join('tm_kriteria', 'tt_detail_evaluasi.kriteria_id', '=', 'tm_kriteria.id')
-            ->join('tt_evaluasi', 'tt_detail_evaluasi.evaluasi_id', '=', 'tt_evaluasi.id')
-            ->join('users', 'tt_evaluasi.evaluator_id', '=', 'users.id')
-            ->join('model_has_roles', 'users.id', '=', 'model_has_roles.model_id')
-            ->join('roles', 'model_has_roles.role_id', '=', 'roles.id')
-            ->where('model_has_roles.model_type', 'App\\Models\\User')
+        // Hitung nilai rata-rata per role untuk kriteria utama
+        // (Detail evaluasi yang TIDAK memiliki sub_kriteria_id atau semua detail untuk kriteria ini)
+        $nilaiPerRole = DB::table('tt_detail_evaluasi as de')
+            ->join('tt_evaluasi as e', 'de.evaluasi_id', '=', 'e.id')
+            ->join('users as u', 'e.evaluator_id', '=', 'u.id')
+            ->join('model_has_roles as mr', 'u.id', '=', 'mr.model_id')
+            ->join('roles as r', 'mr.role_id', '=', 'r.id')
+            ->where('mr.model_type', 'App\\Models\\User')
+            ->where('de.kriteria_id', $kriteriaId)
+            ->whereIn('de.evaluasi_id', $evaluasiIds)
             ->select(
-                'tt_detail_evaluasi.kriteria_id',
-                'tm_kriteria.nama as kriteria_nama',
-                'tm_kriteria.bobot as kriteria_bobot',
-                DB::raw('AVG(CASE WHEN roles.name = "siswa" THEN tt_detail_evaluasi.nilai ELSE NULL END) as nilai_rata_siswa'),
-                DB::raw('AVG(CASE WHEN roles.name = "guru" THEN tt_detail_evaluasi.nilai ELSE NULL END) as nilai_rata_rekan'),
-                DB::raw('AVG(CASE WHEN roles.name = "kepala_sekolah" OR roles.name = "kepsek" THEN tt_detail_evaluasi.nilai ELSE NULL END) as nilai_pengawas'),
-                DB::raw('AVG(tt_detail_evaluasi.nilai) as nilai_rata_akhir')
+                'r.name as role_name',
+                DB::raw('AVG(de.nilai) as avg_nilai')
             )
-            ->whereIn('tt_detail_evaluasi.evaluasi_id', $evaluasiIds)
-            ->groupBy('tt_detail_evaluasi.kriteria_id', 'tm_kriteria.nama', 'tm_kriteria.bobot')
+            ->groupBy('r.name')
             ->get()
-            ->toArray();
+            ->keyBy('role_name');
+
+        $nilaiSiswa = 0;
+        $nilaiRekan = 0;
+        $nilaiPengawas = 0;
+
+        if (isset($nilaiPerRole['siswa'])) {
+            $nilaiSiswa = $nilaiPerRole['siswa']->avg_nilai;
+        }
+        if (isset($nilaiPerRole['guru'])) {
+            $nilaiRekan = $nilaiPerRole['guru']->avg_nilai;
+        }
+        if (isset($nilaiPerRole['kepala_sekolah']) || isset($nilaiPerRole['kepsek'])) {
+            $nilaiPengawas = $nilaiPerRole['kepala_sekolah']->avg_nilai ?? $nilaiPerRole['kepsek']->avg_nilai ?? 0;
+        }
+
+        // Hitung nilai rata-rata keseluruhan
+        $nilaiRataAkhir = DB::table('tt_detail_evaluasi')
+            ->where('kriteria_id', $kriteriaId)
+            ->whereIn('evaluasi_id', $evaluasiIds)
+            ->avg('nilai') ?? 0;
+
+        // Ambil sub kriteria jika ada
+        $subKriteriaData = [];
+        $subKriteriaList = DB::table('tm_sub_kriteria')
+            ->where('kriteria_id', $kriteriaId)
+            ->where('aktif', true)
+            ->orderBy('urutan')
+            ->get();
+
+        foreach ($subKriteriaList as $subKriteria) {
+            // Cek apakah sub kriteria ini pernah dievaluasi
+            $hasEvaluation = DB::table('tt_detail_evaluasi')
+                ->where('sub_kriteria_id', $subKriteria->id)
+                ->whereIn('evaluasi_id', $evaluasiIds)
+                ->exists();
+
+            if (!$hasEvaluation) {
+                continue; // Skip jika tidak ada evaluasi untuk sub kriteria ini
+            }
+
+            // Hitung nilai rata-rata per role untuk sub kriteria
+            $subNilaiPerRole = DB::table('tt_detail_evaluasi as de')
+                ->join('tt_evaluasi as e', 'de.evaluasi_id', '=', 'e.id')
+                ->join('users as u', 'e.evaluator_id', '=', 'u.id')
+                ->join('model_has_roles as mr', 'u.id', '=', 'mr.model_id')
+                ->join('roles as r', 'mr.role_id', '=', 'r.id')
+                ->where('mr.model_type', 'App\\Models\\User')
+                ->where('de.sub_kriteria_id', $subKriteria->id)
+                ->whereIn('de.evaluasi_id', $evaluasiIds)
+                ->select(
+                    'r.name as role_name',
+                    DB::raw('AVG(de.nilai) as avg_nilai')
+                )
+                ->groupBy('r.name')
+                ->get()
+                ->keyBy('role_name');
+
+            $subNilaiSiswa = $subNilaiPerRole['siswa']->avg_nilai ?? 0;
+            $subNilaiRekan = $subNilaiPerRole['guru']->avg_nilai ?? 0;
+            $subNilaiPengawas = $subNilaiPerRole['kepala_sekolah']->avg_nilai ?? $subNilaiPerRole['kepsek']->avg_nilai ?? 0;
+
+            $subNilaiRataAkhir = DB::table('tt_detail_evaluasi')
+                ->where('sub_kriteria_id', $subKriteria->id)
+                ->whereIn('evaluasi_id', $evaluasiIds)
+                ->avg('nilai') ?? 0;
+
+            $subKriteriaData[] = [
+                'sub_kriteria_id' => $subKriteria->id,
+                'sub_kriteria_nama' => $subKriteria->nama,
+                'sub_kriteria_bobot' => (float) $subKriteria->bobot,
+                'nilai_rata_siswa' => (float) $subNilaiSiswa,
+                'nilai_rata_rekan' => (float) $subNilaiRekan,
+                'nilai_pengawas' => (float) $subNilaiPengawas,
+                'nilai_rata_akhir' => (float) $subNilaiRataAkhir,
+            ];
+        }
+
+        $result[] = [
+            'kriteria_id' => $kriteria->id,
+            'kriteria_nama' => $kriteria->nama,
+            'kriteria_bobot' => (float) $kriteria->bobot,
+            'nilai_rata_siswa' => (float) $nilaiSiswa,
+            'nilai_rata_rekan' => (float) $nilaiRekan,
+            'nilai_pengawas' => (float) $nilaiPengawas,
+            'nilai_rata_akhir' => (float) $nilaiRataAkhir,
+            'sub_kriteria' => $subKriteriaData,
+        ];
     }
+
+    return $result;
+}
 
     /**
      * Get evaluator counts per role.
@@ -492,4 +601,5 @@ class HasilEvaluasiController extends Controller
         throw $e;
     }
 }
+
 }

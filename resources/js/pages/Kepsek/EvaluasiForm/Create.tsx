@@ -11,21 +11,34 @@ import { ChevronLeft, GraduationCap } from 'lucide-react';
 import KepsekEvaluasiForm from './KepsekEvaluasiForm';
 
 // Interfaces
-interface User {
+export interface User {
     id: number;
     name: string;
     email: string;
 }
 
-interface Guru {
+export interface MataPelajaran {
+    id: number;
+    nama: string;
+    kode: string;
+}
+
+export interface Guru {
     id: number;
     nip: string;
     user_id: number;
     user: User;
-    mata_pelajaran: {
-        id: number;
-        nama: string;
-    }[];
+    mata_pelajaran?: MataPelajaran;
+}
+interface SubKriteria {
+    id: number;
+    kriteria_id: number;
+    nama: string;
+    deskripsi: string;
+    bobot: number;
+    urutan: number;
+    aktif: boolean;
+    detail_evaluasi_count?: number; // Added for the withCount query
 }
 
 interface Kriteria {
@@ -33,14 +46,40 @@ interface Kriteria {
     nama: string;
     deskripsi: string;
     bobot: number;
+    aktif: boolean;
+    subKriteria?: SubKriteria[];  // ✅ CHANGED from sub_kriteria to subKriteria
+    detail_evaluasi_count?: number; // Added for the withCount query
 }
 
 interface PeriodeEvaluasi {
     id: number;
     judul: string;
-    tanggal_mulai: string;
-    tanggal_selesai: string;
-    status: 'draft' | 'aktif' | 'selesai';
+}
+
+interface DetailEvaluasi {
+    kriteria_id: number;
+    sub_kriteria_id?: number | null;
+    nilai: number;
+    komentar?: string;
+}
+
+interface Evaluasi {
+    id?: number;
+    guru_id: number;
+    periode_evaluasi_id: number;
+    evaluator_id?: number;
+    status: 'draft' | 'selesai';
+    detail_evaluasi: DetailEvaluasi[];
+}
+
+// Form props
+interface KepsekEvaluasiFormProps {
+    guru: Guru;
+    kriteriaList: Kriteria[];
+    periodeAktif: PeriodeEvaluasi;
+    evaluasi?: Evaluasi;
+    mode: 'create' | 'edit' | 'view';
+    onClose?: () => void;
 }
 
 interface CreateEvaluasiProps extends PageProps {
@@ -52,7 +91,6 @@ interface CreateEvaluasiProps extends PageProps {
 }
 
 export default function CreateEvaluasi({ guru, kriteriaList, periodeAktif, message, error }: CreateEvaluasiProps) {
-    // Effect for toast notifications
     useEffect(() => {
         if (message) {
             toast.success(message);
@@ -62,12 +100,10 @@ export default function CreateEvaluasi({ guru, kriteriaList, periodeAktif, messa
         }
     }, [message, error]);
 
-    // Handle back button
     const handleBack = () => {
         router.get(route('kepsek.evaluasi-form.index'));
     };
 
-    // Breadcrumbs for navigation
     const breadcrumbs: BreadcrumbItem[] = [
         {
             title: 'Dashboard',
@@ -90,20 +126,16 @@ export default function CreateEvaluasi({ guru, kriteriaList, periodeAktif, messa
             <Toaster position="top-right" richColors />
 
             <div className="p-4">
-                {/* Header with Back Button */}
                 <div className="flex items-center mb-6">
                     <Button variant="outline" size="icon" className="mr-4" onClick={handleBack}>
                         <ChevronLeft className="h-4 w-4" />
                     </Button>
                     <div>
                         <h1 className="text-2xl font-bold">Form Evaluasi Guru</h1>
-                        <p className="text-gray-500">
-                            Periode: {periodeAktif.judul}
-                        </p>
+                        <p className="text-gray-500">Periode: {periodeAktif.judul}</p>
                     </div>
                 </div>
 
-                {/* Guru Info Card */}
                 <Card className="mb-6">
                     <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
                         <div className="flex items-start gap-4">
@@ -112,25 +144,26 @@ export default function CreateEvaluasi({ guru, kriteriaList, periodeAktif, messa
                             </div>
                             <div>
                                 <CardTitle>{guru.user.name}</CardTitle>
-                                <CardDescription className="flex flex-col">
+                                <CardDescription className="flex flex-col gap-1">
                                     <span>NIP: {guru.nip}</span>
                                     <span>Email: {guru.user.email}</span>
+                                    {/* ✅ PERBAIKAN: Render objek tunggal, bukan array */}
                                     <div className="flex flex-wrap gap-1 mt-2">
-                                        {Array.isArray(guru.mata_pelajaran) && guru.mata_pelajaran.length > 0 ? (
-                                            guru.mata_pelajaran.map((mapel) => (
-                                                <span key={mapel.id} className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                                                    {mapel.nama}
-                                                </span>
-                                            ))
+                                        {guru.mata_pelajaran ? (
+                                            <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800">
+                                                {guru.mata_pelajaran.nama}
+                                            </span>
                                         ) : (
-                                            <span className="text-xs text-gray-500">Belum ada mata pelajaran</span>
+                                            <span className="text-xs text-gray-500 italic">
+                                                Belum ada mata pelajaran
+                                            </span>
                                         )}
                                     </div>
                                 </CardDescription>
                             </div>
                         </div>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="pt-6">
                         <KepsekEvaluasiForm
                             guru={guru}
                             kriteriaList={kriteriaList}

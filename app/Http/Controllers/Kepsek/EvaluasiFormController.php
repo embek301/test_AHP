@@ -27,7 +27,7 @@ class EvaluasiFormController extends Controller
             ->orderBy('created_at', 'desc')
             ->first();
         
-        // Get list of guru - PERBAIKAN: load dengan relasi yang lebih lengkap
+        // Get list of guru
         $guruQuery = Guru::with(['user', 'mataPelajaran'])
             ->whereHas('user', function ($query) {
                 $query->where('is_active', true);
@@ -110,14 +110,17 @@ class EvaluasiFormController extends Controller
                 ->with('error', 'Tidak ada periode evaluasi yang aktif saat ini.');
         }
         
-        // Get kriteria list
-        $kriteriaList = Kriteria::where('aktif', true)
+        // Get kriteria list with sub kriteria
+        $kriteriaList = Kriteria::with(['subKriteria' => function ($query) {
+            $query->where('aktif', true)->orderBy('urutan');
+        }])
+            ->where('aktif', true)
             ->orderBy('nama')
             ->get();
         
         // Check if evaluasi already exists
         $user = Auth::user();
-        $evaluasi = Evaluasi::with('detailEvaluasi')
+        $evaluasi = Evaluasi::with(['detailEvaluasi.subKriteria'])
             ->where('guru_id', $guruId)
             ->where('periode_evaluasi_id', $periodeAktif->id)
             ->where('evaluator_id', $user->id)
@@ -140,14 +143,18 @@ class EvaluasiFormController extends Controller
      */
     public function store(Request $request)
     {
+        \Log::info('Kepsek Request data received:', $request->all());
+        
         $request->validate([
             'guru_id' => 'required|exists:tm_guru,id',
             'periode_evaluasi_id' => 'required|exists:tt_periode_evaluasi,id',
             'detail_evaluasi' => 'required|array',
             'detail_evaluasi.*.kriteria_id' => 'required|exists:tm_kriteria,id',
-            'detail_evaluasi.*.nilai' => 'required|numeric|min:1|max:100',
+            'detail_evaluasi.*.sub_kriteria_id' => 'nullable|exists:tm_sub_kriteria,id',
+            'detail_evaluasi.*.nilai' => 'required|numeric|min:1|max:5',
             'detail_evaluasi.*.komentar' => 'nullable|string',
             'status' => 'required|in:draft,selesai',
+            'komentar_umum' => 'nullable|string',
         ]);
         
         $user = Auth::user();
@@ -172,24 +179,42 @@ class EvaluasiFormController extends Controller
                 'periode_evaluasi_id' => $request->periode_evaluasi_id,
                 'evaluator_id' => $user->id,
                 'status' => $request->status,
+                'jenis' => 'kepsek',
             ]);
             
+            \Log::info('Kepsek Evaluasi created with ID: ' . $evaluasi->id);
+            
             // Create detail evaluasi
-            foreach ($request->detail_evaluasi as $detail) {
-                DetailEvaluasi::create([
+            foreach ($request->detail_evaluasi as $index => $detail) {
+                $detailData = [
                     'evaluasi_id' => $evaluasi->id,
                     'kriteria_id' => $detail['kriteria_id'],
+                    'sub_kriteria_id' => $detail['sub_kriteria_id'] ?? null,
                     'nilai' => $detail['nilai'],
                     'komentar' => $detail['komentar'] ?? null,
-                ]);
+                ];
+                
+                \Log::info("Creating kepsek detail evaluasi [$index]:", $detailData);
+                
+                DetailEvaluasi::create($detailData);
             }
             
-            // If status selesai, recalculate the hasil_evaluasi
-            if ($request->status === 'selesai') {
-                $this->calculateHasilEvaluasi($request->guru_id, $request->periode_evaluasi_id);
+            // Add komentar umum if exists
+            if ($request->komentar_umum) {
+                DetailEvaluasi::create([
+                    'evaluasi_id' => $evaluasi->id,
+                    'kriteria_id' => null,
+                    'sub_kriteria_id' => null,
+                    'nilai' => 0,
+                    'komentar' => $request->komentar_umum,
+                ]);
+                
+                \Log::info('Komentar umum created');
             }
             
             DB::commit();
+            
+            \Log::info('Transaction committed successfully');
             
             return redirect()->route('kepsek.evaluasi-form.show', $evaluasi->id)
                 ->with('message', $request->status === 'selesai' 
@@ -198,6 +223,9 @@ class EvaluasiFormController extends Controller
                     
         } catch (\Exception $e) {
             DB::rollback();
+            
+            \Log::error('Error storing kepsek evaluasi: ' . $e->getMessage());
+            \Log::error('Stack trace: ' . $e->getTraceAsString());
             
             return redirect()->back()
                 ->with('error', 'Gagal menyimpan evaluasi: ' . $e->getMessage());
@@ -209,7 +237,10 @@ class EvaluasiFormController extends Controller
      */
     public function show($id)
     {
-        $evaluasi = Evaluasi::with('detailEvaluasi')->findOrFail($id);
+        $evaluasi = Evaluasi::with([
+            'detailEvaluasi.kriteria',
+            'detailEvaluasi.subKriteria'
+        ])->findOrFail($id);
         
         // Security check: only show if the user is the evaluator
         if ($evaluasi->evaluator_id !== Auth::id()) {
@@ -220,8 +251,13 @@ class EvaluasiFormController extends Controller
         $guru = Guru::with(['user', 'mataPelajaran'])->findOrFail($evaluasi->guru_id);
         $periodeEvaluasi = PeriodeEvaluasi::findOrFail($evaluasi->periode_evaluasi_id);
         
-        // Get kriteria list with details
-        $kriteriaList = Kriteria::where('aktif', true)->orderBy('nama')->get();
+        // Get kriteria list with sub kriteria
+        $kriteriaList = Kriteria::with(['subKriteria' => function ($query) {
+            $query->where('aktif', true)->orderBy('urutan');
+        }])
+            ->where('aktif', true)
+            ->orderBy('nama')
+            ->get();
         
         return Inertia::render('Kepsek/EvaluasiForm/Show', [
             'guru' => $guru,
@@ -236,7 +272,10 @@ class EvaluasiFormController extends Controller
      */
     public function edit($id)
     {
-        $evaluasi = Evaluasi::with('detailEvaluasi')->findOrFail($id);
+        $evaluasi = Evaluasi::with([
+            'detailEvaluasi.kriteria',
+            'detailEvaluasi.subKriteria'
+        ])->findOrFail($id);
         
         // Security check: only edit if the user is the evaluator
         if ($evaluasi->evaluator_id !== Auth::id()) {
@@ -253,13 +292,18 @@ class EvaluasiFormController extends Controller
                 ->with('error', 'Periode evaluasi sudah tidak aktif, tidak dapat mengedit evaluasi');
         }
         
-        // Get kriteria list
-        $kriteriaList = Kriteria::where('aktif', true)->orderBy('nama')->get();
+        // Get kriteria list with sub kriteria
+        $kriteriaList = Kriteria::with(['subKriteria' => function ($query) {
+            $query->where('aktif', true)->orderBy('urutan');
+        }])
+            ->where('aktif', true)
+            ->orderBy('nama')
+            ->get();
         
         return Inertia::render('Kepsek/EvaluasiForm/Edit', [
             'guru' => $guru,
             'kriteriaList' => $kriteriaList,
-            'periodeEvaluasi' => $periodeEvaluasi,
+            'periodeAktif' => $periodeEvaluasi,
             'evaluasi' => $evaluasi,
         ]);
     }
@@ -272,9 +316,11 @@ class EvaluasiFormController extends Controller
         $request->validate([
             'detail_evaluasi' => 'required|array',
             'detail_evaluasi.*.kriteria_id' => 'required|exists:tm_kriteria,id',
-            'detail_evaluasi.*.nilai' => 'required|numeric|min:1|max:100',
+            'detail_evaluasi.*.sub_kriteria_id' => 'nullable|exists:tm_sub_kriteria,id',
+            'detail_evaluasi.*.nilai' => 'required|numeric|min:1|max:5',
             'detail_evaluasi.*.komentar' => 'nullable|string',
             'status' => 'required|in:draft,selesai',
+            'komentar_umum' => 'nullable|string',
         ]);
         
         $evaluasi = Evaluasi::findOrFail($id);
@@ -299,25 +345,34 @@ class EvaluasiFormController extends Controller
             $evaluasi->status = $request->status;
             $evaluasi->save();
             
-            // Update detail evaluasi
+            // Delete old detail evaluasi (except komentar umum)
+            DetailEvaluasi::where('evaluasi_id', $evaluasi->id)
+                ->whereNotNull('kriteria_id')
+                ->delete();
+            
+            // Create new detail evaluasi
             foreach ($request->detail_evaluasi as $detail) {
-                // Find or create detail
-                $detailModel = DetailEvaluasi::updateOrCreate(
-                    [
-                        'evaluasi_id' => $evaluasi->id,
-                        'kriteria_id' => $detail['kriteria_id'],
-                    ],
-                    [
-                        'nilai' => $detail['nilai'],
-                        'komentar' => $detail['komentar'] ?? null,
-                    ]
-                );
+                DetailEvaluasi::create([
+                    'evaluasi_id' => $evaluasi->id,
+                    'kriteria_id' => $detail['kriteria_id'],
+                    'sub_kriteria_id' => $detail['sub_kriteria_id'] ?? null,
+                    'nilai' => $detail['nilai'],
+                    'komentar' => $detail['komentar'] ?? null,
+                ]);
             }
             
-            // If status selesai, recalculate the hasil_evaluasi
-            if ($request->status === 'selesai') {
-                $this->calculateHasilEvaluasi($evaluasi->guru_id, $evaluasi->periode_evaluasi_id);
-            }
+            // Update or create komentar umum
+            DetailEvaluasi::updateOrCreate(
+                [
+                    'evaluasi_id' => $evaluasi->id,
+                    'kriteria_id' => null,
+                ],
+                [
+                    'sub_kriteria_id' => null,
+                    'nilai' => 0,
+                    'komentar' => $request->komentar_umum ?? null,
+                ]
+            );
             
             DB::commit();
             
@@ -329,6 +384,9 @@ class EvaluasiFormController extends Controller
         } catch (\Exception $e) {
             DB::rollback();
             
+            \Log::error('Error updating kepsek evaluasi: ' . $e->getMessage());
+            \Log::error('Stack trace: ' . $e->getTraceAsString());
+            
             return redirect()->back()
                 ->with('error', 'Gagal mengupdate evaluasi: ' . $e->getMessage());
         }
@@ -339,7 +397,7 @@ class EvaluasiFormController extends Controller
      */
     public function export($id)
     {
-        $evaluasi = Evaluasi::with(['detailEvaluasi.kriteria', 'guru.user', 'periodeEvaluasi'])->findOrFail($id);
+        $evaluasi = Evaluasi::with(['detailEvaluasi.kriteria', 'detailEvaluasi.subKriteria', 'guru.user', 'periodeEvaluasi'])->findOrFail($id);
         
         // Security check: only export if the user is the evaluator
         if ($evaluasi->evaluator_id !== Auth::id()) {
@@ -352,10 +410,16 @@ class EvaluasiFormController extends Controller
         $totalWeight = 0;
         
         foreach ($evaluasi->detailEvaluasi as $detail) {
-            $weight = $detail->kriteria->bobot / 100; // Convert percent to decimal
-            $weightedScore = $detail->nilai * $weight;
-            $totalScore += $weightedScore;
-            $totalWeight += $weight;
+            if ($detail->kriteria_id) {
+                // Get weight from sub_kriteria if exists, otherwise from kriteria
+                $weight = $detail->subKriteria 
+                    ? ($detail->subKriteria->bobot / 100)
+                    : ($detail->kriteria->bobot / 100);
+                
+                $weightedScore = $detail->nilai * $weight;
+                $totalScore += $weightedScore;
+                $totalWeight += $weight;
+            }
         }
         
         $averageScore = $totalWeight > 0 ? $totalScore / $totalWeight : 0;
@@ -368,14 +432,11 @@ class EvaluasiFormController extends Controller
             'scoreCategory' => $this->getScoreCategory($averageScore),
         ];
         
-        // Perbaikan: Inject PDF sebagai dependency, bukan menggunakan static method
         $pdf = app('dompdf.wrapper');
         $pdf->loadView('exports.evaluasi_pdf', $data);
         
-        // Buka PDF di tab baru menggunakan stream
         $filename = 'evaluasi_' . str_replace(' ', '_', $evaluasi->guru->user->name) . '_' . Carbon::now()->format('Ymd_His') . '.pdf';
         
-        // Stream PDF (buka di tab baru)
         return $pdf->stream($filename);
     }
     
@@ -384,21 +445,14 @@ class EvaluasiFormController extends Controller
      */
     private function calculateHasilEvaluasi($guruId, $periodeEvaluasiId)
     {
-        // Your calculation logic here...
-        // This is a placeholder - you would implement your actual calculation logic
-        
-        // Example of how this might start:
-        // 1. Get all completed evaluations for this guru in this periode
+        // Get all completed evaluations for this guru in this periode
         $evaluasi = Evaluasi::with('detailEvaluasi.kriteria')
             ->where('guru_id', $guruId)
             ->where('periode_evaluasi_id', $periodeEvaluasiId)
             ->where('status', 'selesai')
             ->get();
         
-        // 2. Calculate scores by criteria and by evaluator type
-        // 3. Calculate weighted scores
-        // 4. Update or create the hasil_evaluasi record
-        
+        // Calculate scores by criteria and by evaluator type
         // This would typically be a complex calculation involving multiple queries
         // and possibly statistical functions
     }
@@ -408,13 +462,13 @@ class EvaluasiFormController extends Controller
      */
     private function getScoreCategory($score)
     {
-        if ($score >= 90) {
+        if ($score >= 4.5) {
             return ['name' => 'Sangat Baik', 'color' => 'green'];
-        } elseif ($score >= 80) {
+        } elseif ($score >= 3.5) {
             return ['name' => 'Baik', 'color' => 'blue'];
-        } elseif ($score >= 70) {
+        } elseif ($score >= 2.5) {
             return ['name' => 'Cukup', 'color' => 'yellow'];
-        } elseif ($score >= 60) {
+        } elseif ($score >= 1.5) {
             return ['name' => 'Kurang', 'color' => 'orange'];
         } else {
             return ['name' => 'Sangat Kurang', 'color' => 'red'];

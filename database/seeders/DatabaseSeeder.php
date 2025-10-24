@@ -14,7 +14,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             RoleSeeder::class,
             UserSeeder::class,
-            DataMasterSeeder::class,
+            RealDataSeeder::class,
             SubKriteriaSeeder::class,
         ]);
     }

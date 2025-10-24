@@ -17,15 +17,28 @@ interface User {
     email: string;
 }
 
+interface MataPelajaran {
+    id: number;
+    nama: string;
+    kode: string;
+}
+
 interface Guru {
     id: number;
     nip: string;
     user_id: number;
     user: User;
-    mata_pelajaran?: {
-        id: number;
-        nama: string;
-    };
+    mata_pelajaran?: MataPelajaran | MataPelajaran[]; // Support both single and array
+}
+
+interface SubKriteria {
+    id: number;
+    kriteria_id: number;
+    nama: string;
+    deskripsi: string;
+    bobot: number;
+    urutan: number;
+    aktif: boolean;
 }
 
 interface Kriteria {
@@ -34,6 +47,7 @@ interface Kriteria {
     deskripsi: string;
     kategori: string;
     bobot: number;
+    sub_kriteria?: SubKriteria[];
 }
 
 interface PeriodeEvaluasi {
@@ -53,7 +67,6 @@ interface CreateEvaluasiProps extends PageProps {
 }
 
 export default function CreateEvaluasi({ guru, kriteriaList, periodeAktif, message, error }: CreateEvaluasiProps) {
-    // Effect for toast notifications
     useEffect(() => {
         if (message) {
             toast.success(message);
@@ -63,12 +76,10 @@ export default function CreateEvaluasi({ guru, kriteriaList, periodeAktif, messa
         }
     }, [message, error]);
 
-    // Handle back button
     const handleBack = () => {
         router.get(route('evaluasi-guru.index'));
     };
 
-    // Breadcrumbs for navigation
     const breadcrumbs: BreadcrumbItem[] = [
         {
             title: 'Dashboard',
@@ -84,6 +95,34 @@ export default function CreateEvaluasi({ guru, kriteriaList, periodeAktif, messa
         },
     ];
 
+    // Helper function to render mata pelajaran
+    const renderMataPelajaran = () => {
+        if (!guru.mata_pelajaran) {
+            return <span className="text-xs italic text-gray-500">Belum ada mata pelajaran</span>;
+        }
+
+        if (Array.isArray(guru.mata_pelajaran)) {
+            if (guru.mata_pelajaran.length === 0) {
+                return <span className="text-xs italic text-gray-500">Belum ada mata pelajaran</span>;
+            }
+            return guru.mata_pelajaran.map((mapel) => (
+                <span 
+                    key={mapel.id} 
+                    className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800"
+                >
+                    {mapel.nama}
+                </span>
+            ));
+        }
+
+        // Single object
+        return (
+            <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800">
+                {guru.mata_pelajaran.nama}
+            </span>
+        );
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Evaluasi Guru - ${guru.user.name}`} />
@@ -91,53 +130,29 @@ export default function CreateEvaluasi({ guru, kriteriaList, periodeAktif, messa
             <Toaster position="top-right" richColors />
 
             <div className="p-4">
-                {/* Header dengan tombol kembali */}
                 <div className="flex items-center mb-6">
                     <Button variant="outline" size="icon" className="mr-4" onClick={handleBack}>
                         <ChevronLeft className="h-4 w-4" />
                     </Button>
                     <div>
                         <h1 className="text-2xl font-bold">Form Evaluasi Guru</h1>
-                        <p className="text-gray-500">
-                            Periode: {periodeAktif.judul}
-                        </p>
+                        <p className="text-gray-500">Periode: {periodeAktif.judul}</p>
                     </div>
                 </div>
 
-                {/* Kartu Informasi Guru */}
                 <Card className="mb-6">
                     <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
                         <div className="flex items-start gap-4">
                             <div className="h-12 w-12 rounded-full bg-indigo-100 flex items-center justify-center">
                                 <GraduationCap className="h-6 w-6 text-indigo-600" />
                             </div>
-                            <div>
+                            <div className="flex-1">
                                 <CardTitle>{guru.user.name}</CardTitle>
-                                <CardDescription className="flex flex-col">
+                                <CardDescription className="flex flex-col gap-1">
                                     <span>NIP: {guru.nip}</span>
                                     <span>Email: {guru.user.email}</span>
                                     <div className="flex flex-wrap gap-1 mt-2">
-                                        {guru.mata_pelajaran ? (
-                                            // Periksa apakah mata_pelajaran adalah array
-                                            Array.isArray(guru.mata_pelajaran) && guru.mata_pelajaran.length > 0 ? (
-                                                guru.mata_pelajaran.map((mapel) => (
-                                                    <span key={mapel.id} className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                                                        {mapel.nama}
-                                                    </span>
-                                                ))
-                                            ) : // Jika mata_pelajaran adalah objek tunggal
-                                            typeof guru.mata_pelajaran === 'object' &&
-                                              guru.mata_pelajaran !== null &&
-                                              'nama' in guru.mata_pelajaran ? (
-                                                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                                                    {(guru.mata_pelajaran as { id: number; nama: string }).nama}
-                                                </span>
-                                            ) : (
-                                                <span className="text-xs text-gray-500">Format mata pelajaran tidak valid</span>
-                                            )
-                                        ) : (
-                                            <span className="text-xs text-gray-500">Belum ada mata pelajaran</span>
-                                        )}
+                                        {renderMataPelajaran()}
                                     </div>
                                 </CardDescription>
                             </div>

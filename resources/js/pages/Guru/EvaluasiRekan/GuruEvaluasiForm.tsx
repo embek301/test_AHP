@@ -228,10 +228,8 @@ export default function GuruEvaluasiForm({
     }, [formValues.detail_evaluasi, currentSection]);
 
     const goToSection = (index: number) => {
-        if (index <= maxCompletedSection + 1) {
-            setCurrentSection(index);
-        }
-    };
+    setCurrentSection(index);
+};
 
     const goToNextSection = () => {
         if (currentSection < sectionedItems.length) {
@@ -246,17 +244,35 @@ export default function GuruEvaluasiForm({
     };
 
     const onSubmit = (data: EvaluasiFormValues, status: 'draft' | 'selesai' = 'draft') => {
+        // Filter detail evaluasi: hapus yang nilai 0 untuk draft, validasi semua untuk selesai
+        const filteredDetailEvaluasi = status === 'selesai' 
+            ? data.detail_evaluasi 
+            : data.detail_evaluasi.filter(detail => detail.nilai > 0);
+        
+        // Validasi: pastikan semua nilai terisi jika status selesai
+        if (status === 'selesai') {
+            const hasEmptyValue = data.detail_evaluasi.some(detail => detail.nilai === 0);
+            if (hasEmptyValue) {
+                toast.error('Mohon isi semua nilai sebelum menyelesaikan evaluasi');
+                return;
+            }
+        }
+        
         data.status = status;
         setIsSubmitting(true);
         
         const payload = {
-            ...data,
-            komentar_umum: data.komentar_umum,
+            guru_id: data.guru_id,
+            periode_evaluasi_id: data.periode_evaluasi_id,
+            status: status,
+            komentar_umum: data.komentar_umum || '',
+            detail_evaluasi: filteredDetailEvaluasi,
         };
         
         // Debug: Log payload sebelum dikirim
         console.log('Payload yang akan dikirim:', payload);
-        console.log('Detail evaluasi:', payload.detail_evaluasi);
+        console.log('Total detail evaluasi:', filteredDetailEvaluasi.length);
+        console.log('Detail evaluasi:', filteredDetailEvaluasi);
         
         if (mode === 'edit' && evaluasi?.id) {
             router.put(
@@ -267,11 +283,19 @@ export default function GuruEvaluasiForm({
                         toast.success(status === 'selesai' 
                             ? 'Evaluasi berhasil diselesaikan dan disimpan' 
                             : 'Perubahan evaluasi berhasil disimpan sebagai draft');
+                        setIsSubmitting(false);
                         onClose && onClose();
                     },
                     onError: (errors) => {
                         console.error('Error dari server:', errors);
-                        toast.error('Terjadi kesalahan saat menyimpan evaluasi');
+                        // Tampilkan error secara spesifik
+                        const errorMessages = Object.values(errors).flat();
+                        errorMessages.forEach((msg: any) => {
+                            toast.error(typeof msg === 'string' ? msg : 'Terjadi kesalahan saat menyimpan evaluasi');
+                        });
+                        setIsSubmitting(false);
+                    },
+                    onFinish: () => {
                         setIsSubmitting(false);
                     },
                 }
@@ -285,11 +309,19 @@ export default function GuruEvaluasiForm({
                         toast.success(status === 'selesai' 
                             ? 'Evaluasi berhasil diselesaikan dan disimpan' 
                             : 'Evaluasi berhasil disimpan sebagai draft');
+                        setIsSubmitting(false);
                         onClose && onClose();
                     },
                     onError: (errors) => {
                         console.error('Error dari server:', errors);
-                        toast.error('Terjadi kesalahan saat menyimpan evaluasi');
+                        // Tampilkan error secara spesifik
+                        const errorMessages = Object.values(errors).flat();
+                        errorMessages.forEach((msg: any) => {
+                            toast.error(typeof msg === 'string' ? msg : 'Terjadi kesalahan saat menyimpan evaluasi');
+                        });
+                        setIsSubmitting(false);
+                    },
+                    onFinish: () => {
                         setIsSubmitting(false);
                     },
                 }
@@ -435,7 +467,7 @@ export default function GuruEvaluasiForm({
                                     variant={currentSection === index ? "default" : "outline"}
                                     className={`px-3 min-w-[40px] ${isSectionComplete ? "bg-indigo-100 border-indigo-300 text-indigo-800" : ""}`}
                                     onClick={() => goToSection(index)}
-                                    disabled={index > maxCompletedSection + 1}
+                                    
                                 >
                                     {index + 1}
                                 </Button>

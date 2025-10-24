@@ -5,7 +5,7 @@ namespace Database\Seeders;
 use App\Models\Kriteria;
 use App\Models\SubKriteria;
 use Illuminate\Database\Seeder;
-
+use Illuminate\Support\Facades\DB;
 class SubKriteriaSeeder extends Seeder
 {
     /**
@@ -13,6 +13,11 @@ class SubKriteriaSeeder extends Seeder
      */
     public function run(): void
     {
+        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        DB::table('tm_sub_kriteria')->truncate();
+        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+
+        $this->command->info('Creating sub kriteria...');
         // Sub kriteria untuk "Kemampuan Mengajar"
         $kemampuanMengajar = Kriteria::where('nama', 'Kemampuan Mengajar')->first();
         if ($kemampuanMengajar) {
@@ -186,5 +191,7 @@ class SubKriteriaSeeder extends Seeder
                 SubKriteria::create(array_merge($sk, ['kriteria_id' => $pengembanganDiri->id]));
             }
         }
+         $this->command->info('Sub kriteria created successfully.');
     }
+    
 }

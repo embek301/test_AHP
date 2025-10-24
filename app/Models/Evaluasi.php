@@ -1,6 +1,5 @@
 <?php
 
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -28,8 +27,9 @@ class Evaluasi extends Model
         'periode_evaluasi_id',
         'evaluator_id',
         'guru_id',
-        'status',           // Kolom baru
-        'komentar_umum',    // Kolom baru
+        'status',
+        'jenis',            // Kolom baru untuk jenis evaluasi
+        'komentar_umum',
     ];
 
     /**

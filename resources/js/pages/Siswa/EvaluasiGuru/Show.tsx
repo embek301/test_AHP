@@ -12,19 +12,34 @@ import { ArrowLeft, Calendar, FileText, User } from 'lucide-react';
 import SiswaEvaluasiForm from './SiswaEvaluasiForm';
 
 // Interfaces
+interface User {
+    id: number;
+    name: string;
+    email: string;
+}
+
+interface MataPelajaran {
+    id: number;
+    nama: string;
+    kode: string;
+}
+
 interface Guru {
     id: number;
     nip: string;
     user_id: number;
-    user: {
-        id: number;
-        name: string;
-        email: string;
-    };
-    mata_pelajaran?: {
-        id: number;
-        nama: string;
-    };
+    user: User;
+    mata_pelajaran?: MataPelajaran | MataPelajaran[];
+}
+
+interface SubKriteria {
+    id: number;
+    kriteria_id: number;
+    nama: string;
+    deskripsi: string;
+    bobot: number;
+    urutan: number;
+    aktif: boolean;
 }
 
 interface Kriteria {
@@ -33,6 +48,7 @@ interface Kriteria {
     deskripsi: string;
     kategori: string;
     bobot: number;
+    sub_kriteria?: SubKriteria[];
 }
 
 interface PeriodeEvaluasi {
@@ -45,6 +61,7 @@ interface PeriodeEvaluasi {
 
 interface DetailEvaluasi {
     kriteria_id: number;
+    sub_kriteria_id?: number | null;
     nilai: number;
     komentar?: string;
 }
@@ -107,6 +124,34 @@ export default function Show({ evaluasi, guru, periodeEvaluasi, kriteriaList, me
         window.open(route('evaluasi-guru.export', evaluasi.id), '_blank');
     };
 
+    // Helper function to render mata pelajaran
+    const renderMataPelajaran = () => {
+        if (!guru.mata_pelajaran) {
+            return <span className="text-xs text-gray-500">-</span>;
+        }
+
+        if (Array.isArray(guru.mata_pelajaran)) {
+            if (guru.mata_pelajaran.length === 0) {
+                return <span className="text-xs text-gray-500">-</span>;
+            }
+            return guru.mata_pelajaran.map((mapel) => (
+                <span 
+                    key={mapel.id} 
+                    className="px-2 py-1 text-xs bg-indigo-100 text-indigo-800 rounded-full"
+                >
+                    {mapel.nama}
+                </span>
+            ));
+        }
+
+        // Single object
+        return (
+            <span className="px-2 py-1 text-xs bg-indigo-100 text-indigo-800 rounded-full">
+                {guru.mata_pelajaran.nama}
+            </span>
+        );
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Detail Evaluasi - ${guru.user.name}`} />
@@ -161,29 +206,7 @@ export default function Show({ evaluasi, guru, periodeEvaluasi, kriteriaList, me
                                 <div>
                                     <p className="text-sm text-gray-500">Mata Pelajaran</p>
                                     <div className="flex flex-wrap gap-1 mt-1">
-                                        {guru.mata_pelajaran ? (
-                                            // Periksa apakah mata_pelajaran adalah array
-                                            Array.isArray(guru.mata_pelajaran) && guru.mata_pelajaran.length > 0 ? (
-                                                guru.mata_pelajaran.map((mapel) => (
-                                                    <span key={mapel.id} className="px-2 py-1 text-xs bg-indigo-100 text-indigo-800 rounded-full">
-                                                        {mapel.nama}
-                                                    </span>
-                                                ))
-                                            ) : (
-                                                // Type guard untuk memastikan objek memiliki properti nama
-                                                typeof guru.mata_pelajaran === 'object' && 
-                                                guru.mata_pelajaran !== null && 
-                                                'nama' in guru.mata_pelajaran ? (
-                                                    <span className="px-2 py-1 text-xs bg-indigo-100 text-indigo-800 rounded-full">
-                                                        {(guru.mata_pelajaran as {id: number, nama: string}).nama}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-xs text-gray-500">Format mata pelajaran tidak valid</span>
-                                                )
-                                            )
-                                        ) : (
-                                            <span className="text-xs text-gray-500">-</span>
-                                        )}
+                                        {renderMataPelajaran()}
                                     </div>
                                 </div>
                             </CardContent>

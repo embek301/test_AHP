@@ -17,15 +17,18 @@ interface User {
     email: string;
 }
 
+interface MataPelajaran {
+    id: number;
+    nama: string;
+    kode: string;
+}
+
 interface Guru {
     id: number;
     nip: string;
     user_id: number;
     user: User;
-    mata_pelajaran?: {
-        id: number;
-        nama: string;
-    };
+    mata_pelajaran?: MataPelajaran;  // ✅ Objek tunggal, bukan array
 }
 
 interface Kriteria {
@@ -110,30 +113,16 @@ export default function CreateEvaluasi({ guru, kriteriaList, periodeAktif, messa
                             </div>
                             <div>
                                 <CardTitle>{guru.user.name}</CardTitle>
-                                <CardDescription className="flex flex-col">
+                                <CardDescription className="flex flex-col gap-1">
                                     <span>NIP: {guru.nip}</span>
                                     <span>Email: {guru.user.email}</span>
                                     <div className="mt-2 flex flex-wrap gap-1">
                                         {guru.mata_pelajaran ? (
-                                            // Periksa apakah mata_pelajaran adalah array
-                                            Array.isArray(guru.mata_pelajaran) && guru.mata_pelajaran.length > 0 ? (
-                                                guru.mata_pelajaran.map((mapel) => (
-                                                    <span key={mapel.id} className="rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-800">
-                                                        {mapel.nama}
-                                                    </span>
-                                                ))
-                                            ) : // Jika mata_pelajaran adalah objek tunggal
-                                            typeof guru.mata_pelajaran === 'object' &&
-                                              guru.mata_pelajaran !== null &&
-                                              'nama' in guru.mata_pelajaran ? (
-                                                <span className="rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-800">
-                                                    {(guru.mata_pelajaran as { id: number; nama: string }).nama}
-                                                </span>
-                                            ) : (
-                                                <span className="text-xs text-gray-500">Format mata pelajaran tidak valid</span>
-                                            )
+                                            <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800">
+                                                {guru.mata_pelajaran.nama}
+                                            </span>
                                         ) : (
-                                            <span className="text-xs text-gray-500">Belum ada mata pelajaran</span>
+                                            <span className="text-xs text-gray-500 italic">Belum ada mata pelajaran</span>
                                         )}
                                     </div>
                                 </CardDescription>
@@ -141,7 +130,13 @@ export default function CreateEvaluasi({ guru, kriteriaList, periodeAktif, messa
                         </div>
                     </CardHeader>
                     <CardContent className="pt-6">
-                        <GuruEvaluasiForm guru={guru} kriteriaList={kriteriaList} periodeAktif={periodeAktif} mode="create" onClose={handleBack} />
+                        <GuruEvaluasiForm 
+                            guru={guru} 
+                            kriteriaList={kriteriaList} 
+                            periodeAktif={periodeAktif} 
+                            mode="create" 
+                            onClose={handleBack} 
+                        />
                     </CardContent>
                 </Card>
             </div>

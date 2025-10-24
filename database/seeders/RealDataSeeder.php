@@ -7,6 +7,7 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
+use App\Models\Kriteria;
 use Spatie\Permission\Models\Role;
 
 class RealDataSeeder extends Seeder
@@ -16,35 +17,29 @@ class RealDataSeeder extends Seeder
      */
     public function run(): void
     {
-        // Truncate tables first
         DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-        
-        // Truncate related tables
+
         DB::table('tt_siswa_kelas')->truncate();
         DB::table('tm_guru')->truncate();
         DB::table('users')->truncate();
         DB::table('tm_kelas')->truncate();
         DB::table('tm_mata_pelajaran')->truncate();
-        
-        // Reset foreign key constraints
+        DB::table('tm_kriteria')->truncate();
+        DB::table('tm_sub_kriteria')->truncate();
+        DB::table('model_has_roles')->truncate();
+        DB::table('model_has_permissions')->truncate();
+        DB::table('role_has_permissions')->truncate();
         DB::statement('SET FOREIGN_KEY_CHECKS=1;');
 
         $this->command->info('Creating real data for SMP Penida Katapang...');
 
-        // Create roles first
+        // ✅ URUTAN YANG BENAR
         $this->createRoles();
-        
-        // Create mata pelajaran
-        $this->createMataPelajaran();
-        
-        // Create kelas
-        $this->createKelas();
-        
-        // Create guru data
-        $this->createGuru();
-        
-        // Create siswa data
-        $this->createSiswa();
+        $this->createMataPelajaran();  // 1. Buat mata pelajaran dulu
+        $this->createKelas();           // 2. Buat kelas
+        $this->createKriteria();        // 3. Buat kriteria (sebelum guru)
+        $this->createGuru();            // 4. Buat guru (setelah mata pelajaran)
+        $this->createSiswa();           // 5. Buat siswa
 
         $this->command->info('Real data seeding completed!');
     }
@@ -52,7 +47,7 @@ class RealDataSeeder extends Seeder
     private function createRoles()
     {
         $roles = ['admin', 'kepala_sekolah', 'guru', 'siswa'];
-        
+
         foreach ($roles as $role) {
             Role::firstOrCreate(['name' => $role]);
         }
@@ -272,31 +267,38 @@ class RealDataSeeder extends Seeder
 
             // Assign role
             if ($guru['jabatan'] === 'kepala_sekolah') {
-                $user->assignRole('kepala_sekolah');
+                $user->syncRoles('kepala_sekolah');
             } elseif ($guru['jabatan'] === 'guru') {
-                $user->assignRole('guru');
+                $user->syncRoles('guru');
             } else {
-                $user->assignRole('admin');
+                $user->syncRoles('admin');
             }
 
-            // Create guru record for both guru and kepala_sekolah (all should have mata_pelajaran)
-            if (in_array($guru['jabatan'], ['guru', 'kepala_sekolah']) && $guru['mata_pelajaran']) {
-                $mataPelajaran = DB::table('tm_mata_pelajaran')
-                    ->where('nama', $guru['mata_pelajaran'])
-                    ->first();
-                    
-                if ($mataPelajaran) {
-                    DB::table('tm_guru')->insert([
-                        'user_id' => $user->id,
-                        'nip' => $guru['nip'],
-                        'mata_pelajaran_id' => $mataPelajaran->id,
-                        'tanggal_bergabung' => now()->subYears(rand(1, 10)),
-                        'created_at' => now(),
-                        'updated_at' => now(),
+            // ✅ PERBAIKAN: Create guru record untuk guru dan kepala_sekolah
+           if (in_array($guru['jabatan'], ['guru', 'kepala_sekolah']) && $guru['mata_pelajaran']) {
+            $mataPelajaran = DB::table('tm_mata_pelajaran')
+                ->where('nama', $guru['mata_pelajaran'])
+                ->first();
+                
+            if ($mataPelajaran) {
+                DB::table('tm_guru')->insert([
+                    'user_id' => $user->id,
+                    'nip' => $guru['nip'],
+                    'mata_pelajaran_id' => $mataPelajaran->id,
+                    'tanggal_bergabung' => now()->subYears(rand(1, 10)),
+                    'created_at' => now(),
+                    'updated_at' => now(),
                     ]);
+
+                    $this->command->info("✓ Guru record created for: {$guru['nama']}");
+                } else {
+                    // ✅ TAMBAHKAN LOG untuk debugging
+                    $this->command->warn("⚠ Mata pelajaran '{$guru['mata_pelajaran']}' not found for: {$guru['nama']}");
                 }
             }
         }
+
+        $this->command->info('Guru data created successfully.');
     }
 
     private function createSiswa()
@@ -597,7 +599,7 @@ class RealDataSeeder extends Seeder
             ]);
 
             // Assign student role
-            $user->assignRole('siswa');
+            $user->syncRoles('siswa');
 
             // Find kelas
             $kelas = DB::table('tm_kelas')->where('nama', $siswa['kelas'])->first();
@@ -613,7 +615,47 @@ class RealDataSeeder extends Seeder
 
         $this->command->info('Real siswa data from SMP Penida Katapang created successfully! Total: ' . count($siswaData) . ' students');
     }
+    protected function createKriteria()
+    {
+        $kriteria = [
+            [
+                'nama' => 'Kemampuan Mengajar',
+                'deskripsi' => 'Kemampuan menyampaikan materi dengan jelas dan mudah dipahami',
+                'bobot' => 0.25,
+                'aktif' => true,
+            ],
+            [
+                'nama' => 'Penguasaan Materi',
+                'deskripsi' => 'Tingkat pemahaman dan penguasaan materi yang diajarkan',
+                'bobot' => 0.25,
+                'aktif' => true,
+            ],
+            [
+                'nama' => 'Kedisiplinan',
+                'deskripsi' => 'Ketepatan waktu dan kepatuhan terhadap tata tertib sekolah',
+                'bobot' => 0.15,
+                'aktif' => true,
+            ],
+            [
+                'nama' => 'Interaksi dengan Siswa',
+                'deskripsi' => 'Kemampuan berinteraksi dan membangun hubungan dengan siswa',
+                'bobot' => 0.20,
+                'aktif' => true,
+            ],
+            [
+                'nama' => 'Pengembangan Diri',
+                'deskripsi' => 'Upaya pengembangan diri dan inovasi dalam pengajaran',
+                'bobot' => 0.15,
+                'aktif' => true,
+            ],
+        ];
 
+        foreach ($kriteria as $k) {
+            Kriteria::create($k);
+        }
+
+        $this->command->info('Kriteria data created successfully.');
+    }
     /**
      * Generate consistent email format for students
      */
@@ -623,18 +665,18 @@ class RealDataSeeder extends Seeder
         $email = strtolower($nama);
         $email = str_replace(' ', '.', $email);
         $email = str_replace('-', '.', $email);
-        
+
         // Remove special characters except dots
         $email = preg_replace('/[^a-z0-9.]/', '', $email);
-        
+
         // Remove multiple consecutive dots
         $email = preg_replace('/\.+/', '.', $email);
-        
+
         // Remove leading/trailing dots
         $email = trim($email, '.');
-        
+
         $baseEmail = $email . '@siswa.smppenidakatapang.sch.id';
-        
+
         // Check if email already exists and add suffix if needed
         $suffix = 2;
         $finalEmail = $baseEmail;
@@ -642,7 +684,7 @@ class RealDataSeeder extends Seeder
             $finalEmail = $email . '.' . $suffix . '@siswa.smppenidakatapang.sch.id';
             $suffix++;
         }
-        
+
         return $finalEmail;
     }
 }
