@@ -1,4 +1,3 @@
-<!-- filepath: /Users/flashcode/Documents/project-destra/resources/views/exports/evaluasi_pdf.blade.php -->
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -273,8 +272,8 @@
                 <td class="info-divider">:</td>
                 <td>
                     @if(isset($evaluasi->guru->mataPelajaran))
-                        @if(is_array($evaluasi->guru->mataPelajaran))
-                            {{ implode(', ', array_map(function($mapel) { return $mapel['nama']; }, $evaluasi->guru->mataPelajaran)) }}
+                        @if(is_array($evaluasi->guru->mataPelajaran) || $evaluasi->guru->mataPelajaran instanceof \Illuminate\Support\Collection)
+                            {{ $evaluasi->guru->mataPelajaran->pluck('nama')->join(', ') }}
                         @else
                             {{ $evaluasi->guru->mataPelajaran->nama }}
                         @endif
@@ -286,7 +285,7 @@
             <tr>
                 <td class="info-label">Periode Evaluasi</td>
                 <td class="info-divider">:</td>
-                <td>{{ $evaluasi->periodeEvaluasi->judul }}</td>
+                <td>{{ $periodeEvaluasi->judul }}</td>
             </tr>
             <tr>
                 <td class="info-label">Tanggal Evaluasi</td>
@@ -296,7 +295,7 @@
             <tr>
                 <td class="info-label">Evaluator</td>
                 <td class="info-divider">:</td>
-                <td>Kepala Sekolah</td>
+                <td>{{ $evaluasi->evaluator->name }} ({{ ucfirst($evaluasi->jenis) }})</td>
             </tr>
         </table>
     </div>
@@ -306,9 +305,20 @@
         <div class="section-title">HASIL PENILAIAN</div>
         
         <div class="score-container">
-            <div class="score-box">{{ number_format($averageScore, 1) }}</div>
-            <div class="score-category text-{{ $scoreCategory['color'] }} bg-{{ $scoreCategory['color'] }}">
-                {{ $scoreCategory['name'] }}
+            <div class="score-box">{{ number_format($nilaiRataRata, 1) }}</div>
+            <div class="score-category 
+                @if($nilaiRataRata >= 4.5) text-green bg-green
+                @elseif($nilaiRataRata >= 3.5) text-blue bg-blue
+                @elseif($nilaiRataRata >= 2.5) text-yellow bg-yellow
+                @elseif($nilaiRataRata >= 1.5) text-orange bg-orange
+                @else text-red bg-red
+                @endif">
+                @if($nilaiRataRata >= 4.5) Sangat Baik
+                @elseif($nilaiRataRata >= 3.5) Baik
+                @elseif($nilaiRataRata >= 2.5) Cukup
+                @elseif($nilaiRataRata >= 1.5) Kurang
+                @else Sangat Kurang
+                @endif
             </div>
         </div>
 
@@ -326,55 +336,57 @@
                 @php
                     $no = 1;
                 @endphp
-                @foreach($evaluasi->detailEvaluasi as $detail)
-                    @if($detail->subKriteria)
-                        {{-- Jika ada sub kriteria, tampilkan sub kriteria --}}
-                        <tr class="criteria-sub">
-                            <td class="text-center">{{ $no++ }}</td>
-                            <td class="criteria-sub">
-                                <span style="color: #7c3aed; font-size: 9pt; display: block; margin-bottom: 2px;">
-                                    {{ $detail->kriteria->nama }}
-                                </span>
-                                {{ $detail->subKriteria->nama }}
-                            </td>
-                            <td class="text-center">{{ $detail->subKriteria->bobot }}%</td>
-                            <td class="text-center"><strong>{{ number_format($detail->nilai, 1) }}</strong></td>
-                            <td class="text-center">
-                                @if($detail->nilai >= 4.5)
-                                    <span class="text-green">Sangat Baik</span>
-                                @elseif($detail->nilai >= 3.5)
-                                    <span class="text-blue">Baik</span>
-                                @elseif($detail->nilai >= 2.5)
-                                    <span class="text-yellow">Cukup</span>
-                                @elseif($detail->nilai >= 1.5)
-                                    <span class="text-orange">Kurang</span>
-                                @else
-                                    <span class="text-red">Sangat Kurang</span>
-                                @endif
-                            </td>
-                        </tr>
-                    @else
-                        {{-- Jika tidak ada sub kriteria, tampilkan kriteria utama --}}
-                        <tr>
-                            <td class="text-center">{{ $no++ }}</td>
-                            <td>{{ $detail->kriteria->nama }}</td>
-                            <td class="text-center">{{ $detail->kriteria->bobot }}%</td>
-                            <td class="text-center"><strong>{{ number_format($detail->nilai, 1) }}</strong></td>
-                            <td class="text-center">
-                                @if($detail->nilai >= 4.5)
-                                    <span class="text-green">Sangat Baik</span>
-                                @elseif($detail->nilai >= 3.5)
-                                    <span class="text-blue">Baik</span>
-                                @elseif($detail->nilai >= 2.5)
-                                    <span class="text-yellow">Cukup</span>
-                                @elseif($detail->nilai >= 1.5)
-                                    <span class="text-orange">Kurang</span>
-                                @else
-                                    <span class="text-red">Sangat Kurang</span>
-                                @endif
-                            </td>
-                        </tr>
-                    @endif
+                @foreach($detailByKategori as $kategori => $details)
+                    @foreach($details as $detail)
+                        @if($detail->subKriteria)
+                            {{-- Jika ada sub kriteria, tampilkan sub kriteria --}}
+                            <tr class="criteria-sub">
+                                <td class="text-center">{{ $no++ }}</td>
+                                <td class="criteria-sub">
+                                    <span style="color: #7c3aed; font-size: 9pt; display: block; margin-bottom: 2px;">
+                                        {{ $detail->kriteria->nama }}
+                                    </span>
+                                    {{ $detail->subKriteria->nama }}
+                                </td>
+                                <td class="text-center">{{ $detail->subKriteria->bobot }}%</td>
+                                <td class="text-center"><strong>{{ number_format($detail->nilai, 1) }}</strong></td>
+                                <td class="text-center">
+                                    @if($detail->nilai >= 4.5)
+                                        <span class="text-green">Sangat Baik</span>
+                                    @elseif($detail->nilai >= 3.5)
+                                        <span class="text-blue">Baik</span>
+                                    @elseif($detail->nilai >= 2.5)
+                                        <span class="text-yellow">Cukup</span>
+                                    @elseif($detail->nilai >= 1.5)
+                                        <span class="text-orange">Kurang</span>
+                                    @else
+                                        <span class="text-red">Sangat Kurang</span>
+                                    @endif
+                                </td>
+                            </tr>
+                        @else
+                            {{-- Jika tidak ada sub kriteria, tampilkan kriteria utama --}}
+                            <tr>
+                                <td class="text-center">{{ $no++ }}</td>
+                                <td>{{ $detail->kriteria->nama }}</td>
+                                <td class="text-center">{{ $detail->kriteria->bobot }}%</td>
+                                <td class="text-center"><strong>{{ number_format($detail->nilai, 1) }}</strong></td>
+                                <td class="text-center">
+                                    @if($detail->nilai >= 4.5)
+                                        <span class="text-green">Sangat Baik</span>
+                                    @elseif($detail->nilai >= 3.5)
+                                        <span class="text-blue">Baik</span>
+                                    @elseif($detail->nilai >= 2.5)
+                                        <span class="text-yellow">Cukup</span>
+                                    @elseif($detail->nilai >= 1.5)
+                                        <span class="text-orange">Kurang</span>
+                                    @else
+                                        <span class="text-red">Sangat Kurang</span>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endif
+                    @endforeach
                 @endforeach
             </tbody>
         </table>
@@ -387,23 +399,25 @@
                     $hasComments = false;
                 @endphp
                 
-                @foreach($evaluasi->detailEvaluasi as $detail)
-                    @if($detail->komentar)
-                        @php
-                            $hasComments = true;
-                        @endphp
-                        <p>
-                            <strong>
-                                @if($detail->subKriteria)
-                                    {{ $detail->kriteria->nama }} - {{ $detail->subKriteria->nama }}
-                                @else
-                                    {{ $detail->kriteria->nama }}
-                                @endif
-                                :
-                            </strong> 
-                            {{ $detail->komentar }}
-                        </p>
-                    @endif
+                @foreach($detailByKategori as $kategori => $details)
+                    @foreach($details as $detail)
+                        @if($detail->komentar)
+                            @php
+                                $hasComments = true;
+                            @endphp
+                            <p>
+                                <strong>
+                                    @if($detail->subKriteria)
+                                        {{ $detail->kriteria->nama }} - {{ $detail->subKriteria->nama }}
+                                    @else
+                                        {{ $detail->kriteria->nama }}
+                                    @endif
+                                    :
+                                </strong> 
+                                {{ $detail->komentar }}
+                            </p>
+                        @endif
+                    @endforeach
                 @endforeach
 
                 @if(!$hasComments)
@@ -429,13 +443,13 @@
             Bandung, {{ \Carbon\Carbon::now()->locale('id')->isoFormat('D MMMM YYYY') }}
         </div>
         <div class="signature-name">
-            Kepala SMK Igasar Pindad Bandung
+            {{ $evaluasi->evaluator->name }}
         </div>
     </div>
 
     <!-- Footer -->
     <div class="footer">
-        Dokumen ini dicetak pada tanggal {{ $exportDate }} | Sistem Evaluasi Kinerja Guru SMK Igasar Pindad Bandung
+        Dokumen ini dicetak pada tanggal {{ \Carbon\Carbon::now()->locale('id')->isoFormat('D MMMM YYYY') }} | Sistem Evaluasi Kinerja Guru SMK Igasar Pindad Bandung
     </div>
 </body>
 </html>

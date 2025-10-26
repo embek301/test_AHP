@@ -312,7 +312,7 @@ export default function EvaluasiGuruIndex({
                                     </CardContent>
                                     <CardFooter className="border-t bg-gray-50 pt-3">
                                         {isEvaluated ? (
-                                            <Button variant="outline" className="w-full" onClick={() => goToViewForm(guru.id)}>
+                                            <Button  className="w-full" onClick={() => goToViewForm(guru.id)}>
                                                 Lihat Evaluasi
                                             </Button>
                                         ) : (

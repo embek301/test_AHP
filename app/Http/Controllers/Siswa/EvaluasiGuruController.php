@@ -361,47 +361,60 @@ class EvaluasiGuruController extends Controller
     }
 
     public function export($id)
-    {
-        $evaluasi = Evaluasi::with(['detailEvaluasi.kriteria', 'detailEvaluasi.subKriteria', 'guru.user', 'evaluator.roles'])->findOrFail($id);
-        
-        if ($evaluasi->evaluator_id !== Auth::id()) {
-            return redirect()->route('evaluasi-guru.index')
-                ->with('error', 'Anda tidak memiliki akses untuk melihat evaluasi ini');
-        }
-        
-        $periodeEvaluasi = PeriodeEvaluasi::findOrFail($evaluasi->periode_evaluasi_id);
-        
-        $detailByKategori = [
-            'Semua Kriteria' => $evaluasi->detailEvaluasi
-        ];
-        
-        $nilaiPerKategori = [
-            'Semua Kriteria' => array_sum($evaluasi->detailEvaluasi->pluck('nilai')->toArray()) / count($evaluasi->detailEvaluasi)
-        ];
-        
-        $nilaiRataRata = 0;
-        $totalNilai = 0;
-        $totalKriteria = 0;
-        foreach ($detailByKategori as $kategori => $details) {
-            foreach ($details as $detail) {
-                $totalNilai += $detail->nilai;
-                $totalKriteria++;
-            }
-        }
-        if ($totalKriteria > 0) {
-            $nilaiRataRata = $totalNilai / $totalKriteria;
-        }
-        
-        $pdf = PDF::loadView('pdf.evaluasi-guru', [
-            'evaluasi' => $evaluasi,
-            'periodeEvaluasi' => $periodeEvaluasi,
-            'detailByKategori' => $detailByKategori,
-            'nilaiPerKategori' => $nilaiPerKategori,
-            'nilaiRataRata' => $nilaiRataRata,
-        ]);
-        
-        return $pdf->download('evaluasi-guru-' . $evaluasi->id . '.pdf');
+{
+    // Load evaluasi with all required relationships
+    $evaluasi = Evaluasi::with([
+        'detailEvaluasi.kriteria', 
+        'detailEvaluasi.subKriteria', 
+        'guru.user', 
+        'guru.mataPelajaran',
+        'evaluator',
+        'periodeEvaluasi'
+    ])->findOrFail($id);
+    
+    // Security check
+    if ($evaluasi->evaluator_id !== Auth::id()) {
+        return redirect()->route('evaluasi-guru.index')
+            ->with('error', 'Anda tidak memiliki akses untuk melihat evaluasi ini');
     }
+    
+    $periodeEvaluasi = $evaluasi->periodeEvaluasi;
+    
+    // Group details by category (all criteria in one category for now)
+    $detailByKategori = [
+        'Semua Kriteria' => $evaluasi->detailEvaluasi
+    ];
+    
+    // Calculate average per category
+    $nilaiPerKategori = [];
+    if ($evaluasi->detailEvaluasi->count() > 0) {
+        $nilaiPerKategori['Semua Kriteria'] = $evaluasi->detailEvaluasi->avg('nilai');
+    }
+    
+    // Calculate overall average
+    $nilaiRataRata = 0;
+    if ($evaluasi->detailEvaluasi->count() > 0) {
+        $nilaiRataRata = $evaluasi->detailEvaluasi->avg('nilai');
+    }
+    
+    // Generate PDF
+    $pdf = PDF::loadView('exports.evaluasi-guru', [
+        'evaluasi' => $evaluasi,
+        'periodeEvaluasi' => $periodeEvaluasi,
+        'detailByKategori' => $detailByKategori,
+        'nilaiPerKategori' => $nilaiPerKategori,
+        'nilaiRataRata' => $nilaiRataRata,
+    ]);
+    
+    // Set paper size and orientation
+    $pdf->setPaper('A4', 'portrait');
+    
+    // Generate filename
+    $filename = 'evaluasi-guru-' . str_replace(' ', '-', strtolower($evaluasi->guru->user->name)) . '-' . date('Y-m-d') . '.pdf';
+    
+    // STREAM untuk view di browser (bukan download)
+    return $pdf->stream($filename);
+}
     
     public function viewByGuru($guruId)
     {

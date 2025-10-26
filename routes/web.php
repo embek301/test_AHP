@@ -102,26 +102,47 @@ Route::middleware(['auth', 'verified'])->group(function () {
         }); // Penutup admin prefix
     }); // Penutup role:admin middleware
 
-    Route::middleware(['role:kepala_sekolah'])->group(function () {
-        Route::prefix('kepsek')->group(function () {
-            Route::get('/evaluasi-form', [EvaluasiFormController::class, 'index'])->name('kepsek.evaluasi-form.index');
-            Route::get('/evaluasi-form/create/{guruId}', [EvaluasiFormController::class, 'create'])->name('kepsek.evaluasi-form.create');
-            Route::post('/evaluasi-form', [EvaluasiFormController::class, 'store'])->name('kepsek.evaluasi-form.store');
-            Route::get('/evaluasi-form/{id}', [EvaluasiFormController::class, 'show'])->name('kepsek.evaluasi-form.show');
-            Route::get('/evaluasi-form/{id}/edit', [EvaluasiFormController::class, 'edit'])->name('kepsek.evaluasi-form.edit');
-            Route::put('/evaluasi-form/{id}', [EvaluasiFormController::class, 'update'])->name('kepsek.evaluasi-form.update');
-            Route::get('/evaluasi-form/{id}/export', [EvaluasiFormController::class, 'export'])->name('kepsek.evaluasi-form.export');
+   Route::middleware(['role:kepala_sekolah'])->group(function () {
+    Route::prefix('kepsek')->group(function () {
+        // Evaluasi Form Routes
+        Route::get('/evaluasi-form', [EvaluasiFormController::class, 'index'])
+            ->name('kepsek.evaluasi-form.index');
+        Route::get('/evaluasi-form/create/{guruId}', [EvaluasiFormController::class, 'create'])
+            ->name('kepsek.evaluasi-form.create');
+        Route::post('/evaluasi-form', [EvaluasiFormController::class, 'store'])
+            ->name('kepsek.evaluasi-form.store');
+        
+        // ROUTE SHOW - menggunakan query parameter ?guru=id
+        Route::get('/evaluasi-form/show', [EvaluasiFormController::class, 'show'])
+            ->name('kepsek.evaluasi-form.show');
+        
+        // Routes yang menggunakan ID evaluasi sebagai parameter
+        Route::get('/evaluasi-form/{id}/edit', [EvaluasiFormController::class, 'edit'])
+            ->name('kepsek.evaluasi-form.edit');
+        Route::put('/evaluasi-form/{id}', [EvaluasiFormController::class, 'update'])
+            ->name('kepsek.evaluasi-form.update');
+        Route::get('/evaluasi-form/{id}/export', [EvaluasiFormController::class, 'export'])
+            ->name('kepsek.evaluasi-form.export');
 
-            Route::prefix('rekomendasi')->group(function () {
-                Route::get('', [RekomendasiController::class, 'index'])->name('rekomendasi.index');
-                Route::get('/create', [RekomendasiController::class, 'create'])->name('rekomendasi.create');
-                Route::post('', [RekomendasiController::class, 'store'])->name('rekomendasi.store');
-                Route::get('/{rekomendasi}', [RekomendasiController::class, 'show'])->name('rekomendasi.show');
-                Route::get('/{rekomendasi}/edit', [RekomendasiController::class, 'edit'])->name('rekomendasi.edit');
-                Route::put('/{rekomendasi}', [RekomendasiController::class, 'update'])->name('rekomendasi.update');
-                Route::put('/{rekomendasi}/change-status', [RekomendasiController::class, 'changeStatus'])->name('rekomendasi.change-status');
-                Route::delete('/{rekomendasi}', [RekomendasiController::class, 'destroy'])->name('rekomendasi.destroy');
-            });
+        // Rekomendasi Routes
+        Route::prefix('rekomendasi')->group(function () {
+            Route::get('', [RekomendasiController::class, 'index'])
+                ->name('rekomendasi.index');
+            Route::get('/create', [RekomendasiController::class, 'create'])
+                ->name('rekomendasi.create');
+            Route::post('', [RekomendasiController::class, 'store'])
+                ->name('rekomendasi.store');
+            Route::get('/{rekomendasi}', [RekomendasiController::class, 'show'])
+                ->name('rekomendasi.show');
+            Route::get('/{rekomendasi}/edit', [RekomendasiController::class, 'edit'])
+                ->name('rekomendasi.edit');
+            Route::put('/{rekomendasi}', [RekomendasiController::class, 'update'])
+                ->name('rekomendasi.update');
+            Route::put('/{rekomendasi}/change-status', [RekomendasiController::class, 'changeStatus'])
+                ->name('rekomendasi.change-status');
+            Route::delete('/{rekomendasi}', [RekomendasiController::class, 'destroy'])
+                ->name('rekomendasi.destroy');
+        });
         });
     });
 

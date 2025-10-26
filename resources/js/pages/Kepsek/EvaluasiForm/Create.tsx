@@ -30,6 +30,7 @@ export interface Guru {
     user: User;
     mata_pelajaran?: MataPelajaran;
 }
+
 interface SubKriteria {
     id: number;
     kriteria_id: number;
@@ -38,48 +39,21 @@ interface SubKriteria {
     bobot: number;
     urutan: number;
     aktif: boolean;
-    detail_evaluasi_count?: number; // Added for the withCount query
 }
 
 interface Kriteria {
     id: number;
     nama: string;
     deskripsi: string;
+    kategori: string;
     bobot: number;
     aktif: boolean;
-    subKriteria?: SubKriteria[];  // ✅ CHANGED from sub_kriteria to subKriteria
-    detail_evaluasi_count?: number; // Added for the withCount query
+    sub_kriteria?: SubKriteria[];  // Changed to sub_kriteria (snake_case) to match backend
 }
 
 interface PeriodeEvaluasi {
     id: number;
     judul: string;
-}
-
-interface DetailEvaluasi {
-    kriteria_id: number;
-    sub_kriteria_id?: number | null;
-    nilai: number;
-    komentar?: string;
-}
-
-interface Evaluasi {
-    id?: number;
-    guru_id: number;
-    periode_evaluasi_id: number;
-    evaluator_id?: number;
-    status: 'draft' | 'selesai';
-    detail_evaluasi: DetailEvaluasi[];
-}
-
-// Form props
-interface KepsekEvaluasiFormProps {
-    guru: Guru;
-    kriteriaList: Kriteria[];
-    periodeAktif: PeriodeEvaluasi;
-    evaluasi?: Evaluasi;
-    mode: 'create' | 'edit' | 'view';
-    onClose?: () => void;
 }
 
 interface CreateEvaluasiProps extends PageProps {
@@ -147,7 +121,6 @@ export default function CreateEvaluasi({ guru, kriteriaList, periodeAktif, messa
                                 <CardDescription className="flex flex-col gap-1">
                                     <span>NIP: {guru.nip}</span>
                                     <span>Email: {guru.user.email}</span>
-                                    {/* ✅ PERBAIKAN: Render objek tunggal, bukan array */}
                                     <div className="flex flex-wrap gap-1 mt-2">
                                         {guru.mata_pelajaran ? (
                                             <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800">

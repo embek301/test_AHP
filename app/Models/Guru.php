@@ -79,4 +79,8 @@ class Guru extends Model
     {
         return $this->hasMany(Rekomendasi::class, 'guru_id');
     }
+    public function subKriteria()
+{
+    return $this->hasMany(SubKriteria::class);
+}
 }

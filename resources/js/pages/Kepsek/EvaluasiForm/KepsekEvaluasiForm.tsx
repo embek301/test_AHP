@@ -5,17 +5,9 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    Form,
-    FormControl,
-    FormDescription,
-    FormField,
-    FormItem,
-    FormLabel,
-    FormMessage,
-} from '@/components/ui/form';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -45,8 +37,9 @@ interface Kriteria {
     id: number;
     nama: string;
     deskripsi: string;
+    kategori: string;
     bobot: number;
-    subKriteria?: SubKriteria[]; 
+    sub_kriteria?: SubKriteria[];
 }
 
 interface PeriodeEvaluasi {
@@ -84,7 +77,7 @@ interface KepsekEvaluasiFormProps {
 const detailEvaluasiSchema = z.object({
     kriteria_id: z.number(),
     sub_kriteria_id: z.number().nullable().optional(),
-    nilai: z.number().min(1, "Nilai harus diisi").max(5, "Nilai maksimal adalah 5"),
+    nilai: z.number().min(1, 'Nilai harus diisi').max(5, 'Nilai maksimal adalah 5'),
     komentar: z.string().optional(),
 });
 
@@ -98,18 +91,18 @@ const evaluasiSchema = z.object({
 
 type EvaluasiFormValues = z.infer<typeof evaluasiSchema>;
 
-export default function KepsekEvaluasiForm({
-    guru,
-    kriteriaList,
-    periodeAktif,
-    evaluasi,
-    mode,
-    onClose,
-}: KepsekEvaluasiFormProps) {
+export default function KepsekEvaluasiForm({ guru, kriteriaList, periodeAktif, evaluasi, mode, onClose }: KepsekEvaluasiFormProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [currentSection, setCurrentSection] = useState(0);
     const [maxCompletedSection, setMaxCompletedSection] = useState(0);
-    
+
+    // Debug: Log data yang masuk
+    useEffect(() => {
+        console.log('Mode:', mode);
+        console.log('Evaluasi data:', evaluasi);
+        console.log('Kriteria list:', kriteriaList);
+    }, [mode, evaluasi, kriteriaList]);
+
     // Flatten kriteria dan sub kriteria untuk penilaian
     const flattenedItems: Array<{
         type: 'kriteria' | 'sub_kriteria';
@@ -119,17 +112,19 @@ export default function KepsekEvaluasiForm({
     }> = [];
 
     kriteriaList.forEach((kriteria) => {
-    if (kriteria.subKriteria && kriteria.subKriteria.length > 0) {  // ✅ NEW
-        kriteria.subKriteria.forEach((subKriteria) => { 
-                flattenedItems.push({
-                    type: 'sub_kriteria',
-                    kriteria,
-                    subKriteria,
-                    index: flattenedItems.length,
+        if (kriteria.sub_kriteria && kriteria.sub_kriteria.length > 0) {
+            kriteria.sub_kriteria
+                .filter((sub) => sub.aktif)
+                .sort((a, b) => a.urutan - b.urutan)
+                .forEach((subKriteria) => {
+                    flattenedItems.push({
+                        type: 'sub_kriteria',
+                        kriteria,
+                        subKriteria,
+                        index: flattenedItems.length,
+                    });
                 });
-            });
         } else {
-            // Jika tidak ada sub kriteria, tambahkan kriteria langsung
             flattenedItems.push({
                 type: 'kriteria',
                 kriteria,
@@ -137,56 +132,64 @@ export default function KepsekEvaluasiForm({
             });
         }
     });
-    
+
     // Group items into sections of 5
     const sectionedItems = chunkArray(flattenedItems, 5);
-    
+
     // Initialize default values
     const getDefaultValues = (): EvaluasiFormValues => {
-        if (evaluasi) {
-            // For edit/view mode, use existing evaluasi data
+        if (evaluasi && evaluasi.detail_evaluasi) {
             const detailMap: Record<string, DetailEvaluasi> = {};
-            evaluasi.detail_evaluasi.forEach(detail => {
-                const key = detail.sub_kriteria_id 
-                    ? `${detail.kriteria_id}-${detail.sub_kriteria_id}`
-                    : `${detail.kriteria_id}`;
-                detailMap[key] = detail;
+            
+            // Build map dari detail evaluasi yang ada
+            evaluasi.detail_evaluasi.forEach((detail) => {
+                if (detail.kriteria_id) {
+                    const key = detail.sub_kriteria_id 
+                        ? `${detail.kriteria_id}-${detail.sub_kriteria_id}` 
+                        : `${detail.kriteria_id}`;
+                    detailMap[key] = detail;
+                }
             });
-            
-            // Find komentar_umum from detail_evaluasi where kriteria_id is null
+
+            // Cari komentar umum (detail dengan kriteria_id null)
             const komentarUmum = evaluasi.detail_evaluasi.find(
-                detail => !detail.kriteria_id
+                (detail) => !detail.kriteria_id
             )?.komentar || '';
-            
+
+            console.log('Detail map:', detailMap);
+            console.log('Komentar umum:', komentarUmum);
+
             return {
                 guru_id: evaluasi.guru_id,
                 periode_evaluasi_id: evaluasi.periode_evaluasi_id,
                 status: evaluasi.status,
                 komentar_umum: komentarUmum,
-                detail_evaluasi: flattenedItems.map(item => {
+                detail_evaluasi: flattenedItems.map((item) => {
                     const key = item.subKriteria 
-                        ? `${item.kriteria.id}-${item.subKriteria.id}`
+                        ? `${item.kriteria.id}-${item.subKriteria.id}` 
                         : `${item.kriteria.id}`;
                     const existingDetail = detailMap[key];
-                    
-                    return {
+
+                    const result = {
                         kriteria_id: item.kriteria.id,
-                        sub_kriteria_id: item.subKriteria?.id || null,
+                        sub_kriteria_id: item.subKriteria?.id ?? null,
                         nilai: existingDetail?.nilai || 0,
                         komentar: existingDetail?.komentar || '',
                     };
+
+                    console.log(`Mapping ${key}:`, result);
+                    return result;
                 }),
             };
         } else {
-            // For create mode, initialize empty form
             return {
                 guru_id: guru.id,
                 periode_evaluasi_id: periodeAktif.id,
                 status: 'draft',
                 komentar_umum: '',
-                detail_evaluasi: flattenedItems.map(item => ({
+                detail_evaluasi: flattenedItems.map((item) => ({
                     kriteria_id: item.kriteria.id,
-                    sub_kriteria_id: item.subKriteria?.id || null,
+                    sub_kriteria_id: item.subKriteria?.id ?? null,
                     nilai: 0,
                     komentar: '',
                 })),
@@ -199,32 +202,32 @@ export default function KepsekEvaluasiForm({
         resolver: zodResolver(evaluasiSchema),
         defaultValues: getDefaultValues(),
     });
-    
+
     // Watch all form values to calculate progress
     const formValues = form.watch();
-    
+
     // Calculate completion percentage
     const calculateCompletion = () => {
         let filled = 0;
         const total = flattenedItems.length;
-        
-        formValues.detail_evaluasi.forEach(detail => {
+
+        formValues.detail_evaluasi.forEach((detail) => {
             if (detail.nilai > 0) filled++;
         });
-        
+
         return Math.round((filled / total) * 100);
     };
-    
+
     const completionPercentage = calculateCompletion();
-    
+
     // Navigate to next section if current section is complete
     useEffect(() => {
         const currentSectionItems = sectionedItems[currentSection] || [];
-        const isCurrentSectionComplete = currentSectionItems.every(item => {
+        const isCurrentSectionComplete = currentSectionItems.every((item) => {
             const detail = formValues.detail_evaluasi[item.index];
             return detail && detail.nilai > 0;
         });
-        
+
         if (isCurrentSectionComplete && currentSection > maxCompletedSection) {
             setMaxCompletedSection(currentSection);
         }
@@ -232,8 +235,8 @@ export default function KepsekEvaluasiForm({
 
     // Handle section navigation
     const goToSection = (index: number) => {
-    setCurrentSection(index);
-};
+        setCurrentSection(index);
+    };
 
     const goToNextSection = () => {
         if (currentSection < sectionedItems.length) {
@@ -249,51 +252,75 @@ export default function KepsekEvaluasiForm({
 
     // Submit handler
     const onSubmit = (data: EvaluasiFormValues, status: 'draft' | 'selesai' = 'draft') => {
+        const filteredDetailEvaluasi = status === 'selesai' 
+            ? data.detail_evaluasi 
+            : data.detail_evaluasi.filter((detail) => detail.nilai > 0);
+
+        if (status === 'selesai') {
+            const hasEmptyValue = data.detail_evaluasi.some((detail) => detail.nilai === 0);
+            if (hasEmptyValue) {
+                toast.error('Mohon isi semua nilai sebelum menyelesaikan evaluasi');
+                return;
+            }
+        }
+
         data.status = status;
         setIsSubmitting(true);
-        
+
         const payload = {
-            ...data,
-            komentar_umum: data.komentar_umum,
-            detail_evaluasi: data.detail_evaluasi,
+            guru_id: data.guru_id,
+            periode_evaluasi_id: data.periode_evaluasi_id,
+            status: status,
+            komentar_umum: data.komentar_umum || '',
+            detail_evaluasi: filteredDetailEvaluasi,
         };
-        
+
         if (mode === 'edit' && evaluasi?.id) {
-            router.put(
-                route('kepsek.evaluasi-form.update', evaluasi.id),
-                payload,
-                {
-                    onSuccess: () => {
-                        toast.success(status === 'selesai' 
+            router.put(route('kepsek.evaluasi-form.update', evaluasi.id), payload, {
+                onSuccess: () => {
+                    toast.success(
+                        status === 'selesai' 
                             ? 'Evaluasi berhasil diselesaikan dan disimpan' 
-                            : 'Perubahan evaluasi berhasil disimpan sebagai draft');
-                        onClose && onClose();
-                    },
-                    onError: (errors) => {
-                        console.error(errors);
-                        toast.error('Terjadi kesalahan saat menyimpan evaluasi');
-                        setIsSubmitting(false);
-                    },
-                }
-            );
+                            : 'Perubahan evaluasi berhasil disimpan sebagai draft',
+                    );
+                    setIsSubmitting(false);
+                    onClose && onClose();
+                },
+                onError: (errors) => {
+                    console.error('Error dari server:', errors);
+                    const errorMessages = Object.values(errors).flat();
+                    errorMessages.forEach((msg: any) => {
+                        toast.error(typeof msg === 'string' ? msg : 'Terjadi kesalahan saat menyimpan evaluasi');
+                    });
+                    setIsSubmitting(false);
+                },
+                onFinish: () => {
+                    setIsSubmitting(false);
+                },
+            });
         } else {
-            router.post(
-                route('kepsek.evaluasi-form.store'),
-                payload,
-                {
-                    onSuccess: () => {
-                        toast.success(status === 'selesai' 
+            router.post(route('kepsek.evaluasi-form.store'), payload, {
+                onSuccess: () => {
+                    toast.success(
+                        status === 'selesai' 
                             ? 'Evaluasi berhasil diselesaikan dan disimpan' 
-                            : 'Evaluasi berhasil disimpan sebagai draft');
-                        onClose && onClose();
-                    },
-                    onError: (errors) => {
-                        console.error(errors);
-                        toast.error('Terjadi kesalahan saat menyimpan evaluasi');
-                        setIsSubmitting(false);
-                    },
-                }
-            );
+                            : 'Evaluasi berhasil disimpan sebagai draft'
+                    );
+                    setIsSubmitting(false);
+                    onClose && onClose();
+                },
+                onError: (errors) => {
+                    console.error('Error dari server:', errors);
+                    const errorMessages = Object.values(errors).flat();
+                    errorMessages.forEach((msg: any) => {
+                        toast.error(typeof msg === 'string' ? msg : 'Terjadi kesalahan saat menyimpan evaluasi');
+                    });
+                    setIsSubmitting(false);
+                },
+                onFinish: () => {
+                    setIsSubmitting(false);
+                },
+            });
         }
     };
 
@@ -317,56 +344,85 @@ export default function KepsekEvaluasiForm({
                     </p>
                 </div>
 
-                <div className="rounded-md border p-4 space-y-4">
+                <div className="space-y-4 rounded-md border p-4">
                     <h3 className="font-medium">Komentar Umum</h3>
-                    <p className="p-3 bg-gray-50 rounded">
-                        {formValues.komentar_umum || "-"}
-                    </p>
+                    <p className="rounded bg-gray-50 p-3">{formValues.komentar_umum || '-'}</p>
                 </div>
 
                 <div className="space-y-6">
                     {flattenedItems.map((item, index) => {
                         const detail = formValues.detail_evaluasi[index];
+                        
+                        // Debug log untuk setiap item
+                        console.log(`Item ${index}:`, {
+                            kriteria: item.kriteria.nama,
+                            subKriteria: item.subKriteria?.nama,
+                            nilai: detail?.nilai
+                        });
+
                         return (
-                            <div key={index} className="rounded-md border p-4 space-y-3">
+                            <div key={`${item.kriteria.id}-${item.subKriteria?.id || 'main'}`} className="space-y-3 rounded-md border p-4">
                                 <div>
-                                    <h3 className="font-medium">
-                                        {index + 1}. {item.subKriteria ? item.subKriteria.nama : item.kriteria.nama}
-                                    </h3>
-                                    {item.subKriteria && (
-                                        <p className="text-xs text-gray-400 mt-1">
-                                            Kriteria: {item.kriteria.nama}
-                                        </p>
-                                    )}
-                                    {(item.subKriteria?.deskripsi || item.kriteria.deskripsi) && (
-                                        <p className="text-sm text-gray-500 mt-1">
-                                            {item.subKriteria?.deskripsi || item.kriteria.deskripsi}
-                                        </p>
+                                    {item.type === 'sub_kriteria' && item.subKriteria ? (
+                                        <>
+                                            <Badge variant="outline" className="mb-2 bg-purple-50 text-purple-700">
+                                                {item.kriteria.nama}
+                                            </Badge>
+                                            <h3 className="font-medium">
+                                                {index + 1}. {item.subKriteria.nama}
+                                            </h3>
+                                            {item.subKriteria.deskripsi && (
+                                                <p className="mt-1 text-sm text-gray-500">{item.subKriteria.deskripsi}</p>
+                                            )}
+                                            <Badge variant="secondary" className="mt-2">
+                                                Bobot: {item.subKriteria.bobot}%
+                                            </Badge>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <h3 className="font-medium">
+                                                {index + 1}. {item.kriteria.nama}
+                                            </h3>
+                                            {item.kriteria.deskripsi && (
+                                                <p className="mt-1 text-sm text-gray-500">{item.kriteria.deskripsi}</p>
+                                            )}
+                                        </>
                                     )}
                                 </div>
-                                
                                 <div>
-                                    <h4 className="text-sm font-medium">Nilai:</h4>
-                                    <div className="flex space-x-2 mt-1">
-                                        {[1, 2, 3, 4, 5].map((value) => (
-                                            <div
-                                                key={value}
-                                                className={`h-10 w-10 flex items-center justify-center rounded-full border-2 ${
-                                                    detail?.nilai === value
-                                                        ? 'border-indigo-600 bg-indigo-100 text-indigo-800'
-                                                        : 'border-gray-300 bg-gray-50 text-gray-400'
-                                                }`}
-                                            >
-                                                {value}
-                                            </div>
-                                        ))}
+                                    <h4 className="mb-2 text-sm font-medium">Nilai: {detail?.nilai || 'Tidak ada nilai'}</h4>
+                                    <div className="flex space-x-2">
+                                        {[1, 2, 3, 4, 5].map((value) => {
+                                            // Konversi nilai ke integer untuk perbandingan
+                                            const nilaiInt = detail ? Math.round(Number(detail.nilai)) : 0;
+                                            const isSelected = nilaiInt === value;
+                                            return (
+                                                <div
+                                                    key={value}
+                                                    className={`flex h-12 w-12 items-center justify-center rounded-full border-2 text-lg font-semibold ${
+                                                        isSelected
+                                                            ? 'border-indigo-600 bg-indigo-600 text-white shadow-md'
+                                                            : 'border-gray-200 bg-gray-50 text-gray-400'
+                                                    }`}
+                                                >
+                                                    {value}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
+                                    <p className="mt-2 text-xs text-gray-500">
+                                        {Math.round(Number(detail?.nilai)) === 1 && 'Sangat Kurang'}
+                                        {Math.round(Number(detail?.nilai)) === 2 && 'Kurang'}
+                                        {Math.round(Number(detail?.nilai)) === 3 && 'Cukup'}
+                                        {Math.round(Number(detail?.nilai)) === 4 && 'Baik'}
+                                        {Math.round(Number(detail?.nilai)) === 5 && 'Sangat Baik'}
+                                    </p>
                                 </div>
-                                
+
                                 {detail?.komentar && (
                                     <div>
                                         <h4 className="text-sm font-medium">Komentar:</h4>
-                                        <p className="p-3 bg-gray-50 rounded mt-1">{detail.komentar}</p>
+                                        <p className="mt-1 rounded bg-gray-50 p-3">{detail.komentar}</p>
                                     </div>
                                 )}
                             </div>
@@ -394,30 +450,28 @@ export default function KepsekEvaluasiForm({
                             <span>Progress</span>
                             <span>{completionPercentage}% Selesai</span>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2.5">
-                            <div
-                                className="bg-indigo-600 h-2.5 rounded-full transition-all"
-                                style={{ width: `${completionPercentage}%` }}
-                            ></div>
+                        <div className="h-2.5 w-full rounded-full bg-gray-200">
+                            <div className="h-2.5 rounded-full bg-indigo-600" style={{ width: `${completionPercentage}%` }}></div>
                         </div>
                     </div>
 
                     {/* Section navigation */}
-                    <div className="flex overflow-x-auto pb-2 gap-2">
+                    <div className="flex gap-2 overflow-x-auto pb-2">
                         {sectionedItems.map((section, index) => {
-                            const isSectionComplete = section.every(item => {
+                            const isSectionComplete = section.every((item) => {
                                 const detail = formValues.detail_evaluasi[item.index];
                                 return detail && detail.nilai > 0;
                             });
-                            
+
                             return (
                                 <Button
                                     key={index}
                                     type="button"
-                                    variant={currentSection === index ? "default" : "outline"}
-                                    className={`px-3 min-w-[40px] ${isSectionComplete ? "bg-indigo-100 border-indigo-300 text-indigo-800" : ""}`}
+                                    variant={currentSection === index ? 'default' : 'outline'}
+                                    className={`min-w-[40px] px-3 ${
+                                        isSectionComplete ? 'border-indigo-300 bg-indigo-100 text-indigo-800' : ''
+                                    }`}
                                     onClick={() => goToSection(index)}
-                                    
                                 >
                                     {index + 1}
                                 </Button>
@@ -425,12 +479,12 @@ export default function KepsekEvaluasiForm({
                         })}
                         <Button
                             type="button"
-                            variant={currentSection === sectionedItems.length ? "default" : "outline"}
-                            className="px-3 min-w-[40px]"
+                            variant={currentSection === sectionedItems.length ? 'default' : 'outline'}
+                            className="px-3"
                             onClick={() => goToSection(sectionedItems.length)}
                             disabled={sectionedItems.length > maxCompletedSection + 1}
                         >
-                            💬
+                            Komentar
                         </Button>
                     </div>
 
@@ -439,7 +493,7 @@ export default function KepsekEvaluasiForm({
                         {currentSection === sectionedItems.length ? (
                             <div className="space-y-4">
                                 <h2 className="text-xl font-medium">Komentar Umum</h2>
-                                <p className="text-gray-500 text-sm">
+                                <p className="text-sm text-gray-500">
                                     Berikan komentar umum terkait kinerja guru yang dievaluasi.
                                 </p>
 
@@ -450,10 +504,10 @@ export default function KepsekEvaluasiForm({
                                         <FormItem>
                                             <FormLabel>Komentar</FormLabel>
                                             <FormControl>
-                                                <Textarea
-                                                    placeholder="Tuliskan komentar umum di sini..."
-                                                    className="min-h-[200px]"
-                                                    {...field}
+                                                <Textarea 
+                                                    placeholder="Tuliskan komentar umum di sini..." 
+                                                    className="min-h-[200px]" 
+                                                    {...field} 
                                                 />
                                             </FormControl>
                                             <FormDescription>
@@ -468,56 +522,68 @@ export default function KepsekEvaluasiForm({
                             <div className="space-y-8">
                                 {sectionedItems[currentSection]?.map((item) => {
                                     const detailIndex = item.index;
-                                    
+
                                     return (
-                                        <div key={detailIndex} className="space-y-4">
+                                        <div key={`${item.kriteria.id}-${item.subKriteria?.id || 'main'}`} className="space-y-4">
                                             <div>
-                                                <h2 className="text-lg font-medium">
-                                                    {detailIndex + 1}. {item.subKriteria ? item.subKriteria.nama : item.kriteria.nama}
-                                                </h2>
-                                                {item.subKriteria && (
-                                                    <p className="text-xs text-gray-400 mt-1">
-                                                        Kriteria: {item.kriteria.nama}
-                                                    </p>
-                                                )}
-                                                {(item.subKriteria?.deskripsi || item.kriteria.deskripsi) && (
-                                                    <p className="mt-1 text-sm text-gray-500">
-                                                        {item.subKriteria?.deskripsi || item.kriteria.deskripsi}
-                                                    </p>
+                                                {item.type === 'sub_kriteria' && item.subKriteria ? (
+                                                    <>
+                                                        <Badge variant="outline" className="mb-2 bg-purple-50 text-purple-700">
+                                                            {item.kriteria.nama}
+                                                        </Badge>
+                                                        <h2 className="text-lg font-medium">
+                                                            {detailIndex + 1}. {item.subKriteria.nama}
+                                                        </h2>
+                                                        {item.subKriteria.deskripsi && (
+                                                            <p className="mt-1 text-sm text-gray-500">{item.subKriteria.deskripsi}</p>
+                                                        )}
+                                                        <Badge variant="secondary" className="mt-2">
+                                                            Bobot: {item.subKriteria.bobot}%
+                                                        </Badge>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <h2 className="text-lg font-medium">
+                                                            {detailIndex + 1}. {item.kriteria.nama}
+                                                        </h2>
+                                                        {item.kriteria.deskripsi && (
+                                                            <p className="mt-1 text-sm text-gray-500">{item.kriteria.deskripsi}</p>
+                                                        )}
+                                                    </>
                                                 )}
                                             </div>
 
                                             <FormField
-    control={form.control}
-    name={`detail_evaluasi.${detailIndex}.nilai`}
-    render={({ field }) => (
-        <FormItem className="space-y-1">
-            <FormLabel>Nilai</FormLabel>
-            <FormControl>
-                <div className="flex space-x-2">
-                    {[1, 2, 3, 4, 5].map((value) => (
-                        <button
-                            key={value}
-                            type="button"
-                            onClick={() => field.onChange(value)}
-                            className={`h-12 w-12 flex items-center justify-center rounded-full border-2 cursor-pointer transition-colors ${
-                                field.value === value
-                                    ? 'border-indigo-600 bg-indigo-100 text-indigo-800 font-semibold'
-                                    : 'border-gray-300 hover:border-indigo-300 hover:bg-indigo-50'
-                            }`}
-                        >
-                            {value}
-                        </button>
-                    ))}
-                </div>
-            </FormControl>
-            <FormDescription>
-                1 = Sangat Kurang, 2 = Kurang, 3 = Cukup, 4 = Baik, 5 = Sangat Baik
-            </FormDescription>
-            <FormMessage />
-        </FormItem>
-    )}
-/>
+                                                control={form.control}
+                                                name={`detail_evaluasi.${detailIndex}.nilai`}
+                                                render={({ field }) => (
+                                                    <FormItem className="space-y-1">
+                                                        <FormLabel>Nilai</FormLabel>
+                                                        <FormControl>
+                                                            <div className="flex space-x-2">
+                                                                {[1, 2, 3, 4, 5].map((value) => (
+                                                                    <button
+                                                                        key={value}
+                                                                        type="button"
+                                                                        onClick={() => field.onChange(value)}
+                                                                        className={`flex h-12 w-12 cursor-pointer items-center justify-center rounded-full border-2 transition-colors ${
+                                                                            field.value === value
+                                                                                ? 'border-indigo-600 bg-indigo-100 font-semibold text-indigo-800'
+                                                                                : 'border-gray-300 hover:border-indigo-300 hover:bg-indigo-50'
+                                                                        }`}
+                                                                    >
+                                                                        {value}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </FormControl>
+                                                        <FormDescription>
+                                                            1 = Sangat Kurang, 2 = Kurang, 3 = Cukup, 4 = Baik, 5 = Sangat Baik
+                                                        </FormDescription>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
 
                                             <FormField
                                                 control={form.control}
@@ -546,22 +612,12 @@ export default function KepsekEvaluasiForm({
                     {/* Navigation buttons */}
                     <div className="flex justify-between pt-2">
                         <div>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={goToPrevSection}
-                                disabled={currentSection === 0}
-                            >
+                            <Button type="button" variant="outline" onClick={goToPrevSection} disabled={currentSection === 0}>
                                 Sebelumnya
                             </Button>
                         </div>
                         <div className="flex gap-2">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => onSubmit(form.getValues(), 'draft')}
-                                disabled={isSubmitting}
-                            >
+                            <Button type="button" variant="outline" onClick={() => onSubmit(form.getValues(), 'draft')} disabled={isSubmitting}>
                                 Simpan Draft
                             </Button>
                             {currentSection < sectionedItems.length ? (
@@ -569,19 +625,18 @@ export default function KepsekEvaluasiForm({
                                     type="button"
                                     onClick={goToNextSection}
                                     disabled={
-                                        !sectionedItems[currentSection]?.every(item => {
-                                            const detail = form.getValues().detail_evaluasi[item.index];
-                                            return detail && detail.nilai > 0;
-                                        })
+                                        currentSection >= sectionedItems.length ||
+                                        (currentSection < sectionedItems.length &&
+                                            !sectionedItems[currentSection]?.every((item) => {
+                                                const detail = form.getValues().detail_evaluasi[item.index];
+                                                return detail && detail.nilai > 0;
+                                            }))
                                     }
                                 >
                                     Selanjutnya
                                 </Button>
                             ) : (
-                                <Button
-                                    type="submit"
-                                    disabled={isSubmitting || completionPercentage < 100}
-                                >
+                                <Button type="submit" disabled={isSubmitting || completionPercentage < 100}>
                                     {isSubmitting ? 'Menyimpan...' : 'Selesai & Simpan'}
                                 </Button>
                             )}

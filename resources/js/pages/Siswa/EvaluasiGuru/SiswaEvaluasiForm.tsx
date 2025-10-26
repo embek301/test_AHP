@@ -110,7 +110,6 @@ export default function SiswaEvaluasiForm({
     const [currentSection, setCurrentSection] = useState(0);
     const [maxCompletedSection, setMaxCompletedSection] = useState(0);
     
-    // Hitung total item (kriteria + sub kriteria)
     const allEvaluationItems: Array<{
         type: 'kriteria' | 'sub_kriteria';
         kriteria: Kriteria;
@@ -137,16 +136,12 @@ export default function SiswaEvaluasiForm({
         }
     });
     
-    // Kelompokkan items menjadi beberapa bagian dengan 5 items per bagian
     const sectionedItems = chunkArray(allEvaluationItems, 5);
     
-    // Inisialisasi nilai default
     const getDefaultValues = (): EvaluasiFormValues => {
         if (evaluasi) {
-            // Buat map untuk detail evaluasi
             const detailMap: Record<string, DetailEvaluasi> = {};
             evaluasi.detail_evaluasi.forEach(detail => {
-                // Hanya proses detail yang punya kriteria_id (bukan komentar_umum)
                 if (detail.kriteria_id) {
                     const key = detail.sub_kriteria_id 
                         ? `${detail.kriteria_id}-${detail.sub_kriteria_id}`
@@ -155,7 +150,6 @@ export default function SiswaEvaluasiForm({
                 }
             });
             
-            // Ambil komentar_umum dari field Evaluasi
             const komentarUmum = evaluasi.komentar_umum || '';
             
             return {
@@ -247,12 +241,10 @@ export default function SiswaEvaluasiForm({
     };
 
     const onSubmit = (data: EvaluasiFormValues, status: 'draft' | 'selesai' = 'draft') => {
-        // Filter detail evaluasi: hapus yang nilai 0 untuk draft, validasi semua untuk selesai
         const filteredDetailEvaluasi = status === 'selesai' 
             ? data.detail_evaluasi 
             : data.detail_evaluasi.filter(detail => detail.nilai > 0);
         
-        // Validasi: pastikan semua nilai terisi jika status selesai
         if (status === 'selesai') {
             const hasEmptyValue = data.detail_evaluasi.some(detail => detail.nilai === 0);
             if (hasEmptyValue) {
@@ -273,55 +265,47 @@ export default function SiswaEvaluasiForm({
         };
         
         if (mode === 'edit' && evaluasi?.id) {
-            router.put(
-                route('evaluasi-guru.update', evaluasi.id),
-                payload,
-                {
-                    onSuccess: () => {
-                        toast.success(status === 'selesai' 
-                            ? 'Evaluasi berhasil diselesaikan dan disimpan' 
-                            : 'Perubahan evaluasi berhasil disimpan sebagai draft');
-                        setIsSubmitting(false);
-                        onClose && onClose();
-                    },
-                    onError: (errors) => {
-                        console.error('Error dari server:', errors);
-                        const errorMessages = Object.values(errors).flat();
-                        errorMessages.forEach((msg: any) => {
-                            toast.error(typeof msg === 'string' ? msg : 'Terjadi kesalahan saat menyimpan evaluasi');
-                        });
-                        setIsSubmitting(false);
-                    },
-                    onFinish: () => {
-                        setIsSubmitting(false);
-                    },
-                }
-            );
+            router.put(route('evaluasi-guru.update', evaluasi.id), payload, {
+                onSuccess: () => {
+                    toast.success(status === 'selesai' 
+                        ? 'Evaluasi berhasil diselesaikan dan disimpan' 
+                        : 'Perubahan evaluasi berhasil disimpan sebagai draft');
+                    setIsSubmitting(false);
+                    onClose && onClose();
+                },
+                onError: (errors) => {
+                    console.error('Error dari server:', errors);
+                    const errorMessages = Object.values(errors).flat();
+                    errorMessages.forEach((msg: any) => {
+                        toast.error(typeof msg === 'string' ? msg : 'Terjadi kesalahan saat menyimpan evaluasi');
+                    });
+                    setIsSubmitting(false);
+                },
+                onFinish: () => {
+                    setIsSubmitting(false);
+                },
+            });
         } else {
-            router.post(
-                route('evaluasi-guru.store'),
-                payload,
-                {
-                    onSuccess: () => {
-                        toast.success(status === 'selesai' 
-                            ? 'Evaluasi berhasil diselesaikan dan disimpan' 
-                            : 'Evaluasi berhasil disimpan sebagai draft');
-                        setIsSubmitting(false);
-                        onClose && onClose();
-                    },
-                    onError: (errors) => {
-                        console.error('Error dari server:', errors);
-                        const errorMessages = Object.values(errors).flat();
-                        errorMessages.forEach((msg: any) => {
-                            toast.error(typeof msg === 'string' ? msg : 'Terjadi kesalahan saat menyimpan evaluasi');
-                        });
-                        setIsSubmitting(false);
-                    },
-                    onFinish: () => {
-                        setIsSubmitting(false);
-                    },
-                }
-            );
+            router.post(route('evaluasi-guru.store'), payload, {
+                onSuccess: () => {
+                    toast.success(status === 'selesai' 
+                        ? 'Evaluasi berhasil diselesaikan dan disimpan' 
+                        : 'Evaluasi berhasil disimpan sebagai draft');
+                    setIsSubmitting(false);
+                    onClose && onClose();
+                },
+                onError: (errors) => {
+                    console.error('Error dari server:', errors);
+                    const errorMessages = Object.values(errors).flat();
+                    errorMessages.forEach((msg: any) => {
+                        toast.error(typeof msg === 'string' ? msg : 'Terjadi kesalahan saat menyimpan evaluasi');
+                    });
+                    setIsSubmitting(false);
+                },
+                onFinish: () => {
+                    setIsSubmitting(false);
+                },
+            });
         }
     };
 
@@ -390,21 +374,32 @@ export default function SiswaEvaluasiForm({
                                 </div>
                                 
                                 <div>
-                                    <h4 className="text-sm font-medium">Nilai:</h4>
-                                    <div className="flex space-x-2 mt-1">
-                                        {[1, 2, 3, 4, 5].map((value) => (
-                                            <div
-                                                key={value}
-                                                className={`h-10 w-10 flex items-center justify-center rounded-full border-2 ${
-                                                    detail?.nilai === value
-                                                        ? 'border-indigo-600 bg-indigo-100 text-indigo-800'
-                                                        : 'border-gray-300 bg-gray-50 text-gray-400'
-                                                }`}
-                                            >
-                                                {value}
-                                            </div>
-                                        ))}
+                                    <h4 className="text-sm font-medium mb-2">Nilai: {detail?.nilai || 'Tidak ada nilai'}</h4>
+                                    <div className="flex space-x-2">
+                                        {[1, 2, 3, 4, 5].map((value) => {
+                                            const nilaiInt = detail ? Math.round(Number(detail.nilai)) : 0;
+                                            const isSelected = nilaiInt === value;
+                                            return (
+                                                <div
+                                                    key={value}
+                                                    className={`h-12 w-12 flex items-center justify-center rounded-full border-2 text-lg font-semibold ${
+                                                        isSelected
+                                                            ? 'border-indigo-600 bg-indigo-600 text-white shadow-md'
+                                                            : 'border-gray-200 bg-gray-50 text-gray-400'
+                                                    }`}
+                                                >
+                                                    {value}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
+                                    <p className="mt-2 text-xs text-gray-500">
+                                        {Math.round(Number(detail?.nilai)) === 1 && 'Sangat Kurang'}
+                                        {Math.round(Number(detail?.nilai)) === 2 && 'Kurang'}
+                                        {Math.round(Number(detail?.nilai)) === 3 && 'Cukup'}
+                                        {Math.round(Number(detail?.nilai)) === 4 && 'Baik'}
+                                        {Math.round(Number(detail?.nilai)) === 5 && 'Sangat Baik'}
+                                    </p>
                                 </div>
                                 
                                 {detail?.komentar && (
@@ -437,10 +432,7 @@ export default function SiswaEvaluasiForm({
                             <span>{completionPercentage}% Selesai</span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-2.5">
-                            <div
-                                className="bg-indigo-600 h-2.5 rounded-full"
-                                style={{ width: `${completionPercentage}%` }}
-                            ></div>
+                            <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${completionPercentage}%` }}></div>
                         </div>
                     </div>
 
@@ -601,22 +593,12 @@ export default function SiswaEvaluasiForm({
 
                     <div className="flex justify-between pt-2">
                         <div>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={goToPrevSection}
-                                disabled={currentSection === 0}
-                            >
+                            <Button type="button" variant="outline" onClick={goToPrevSection} disabled={currentSection === 0}>
                                 Sebelumnya
                             </Button>
                         </div>
                         <div className="flex gap-2">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => onSubmit(form.getValues(), 'draft')}
-                                disabled={isSubmitting}
-                            >
+                            <Button type="button" variant="outline" onClick={() => onSubmit(form.getValues(), 'draft')} disabled={isSubmitting}>
                                 Simpan Draft
                             </Button>
                             {currentSection < sectionedItems.length ? (
@@ -639,10 +621,7 @@ export default function SiswaEvaluasiForm({
                                     Selanjutnya
                                 </Button>
                             ) : (
-                                <Button
-                                    type="submit"
-                                    disabled={isSubmitting || completionPercentage < 100}
-                                >
+                                <Button type="submit" disabled={isSubmitting || completionPercentage < 100}>
                                     {isSubmitting ? 'Menyimpan...' : 'Selesai & Simpan'}
                                 </Button>
                             )}

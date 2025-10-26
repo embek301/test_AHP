@@ -235,37 +235,79 @@ class EvaluasiFormController extends Controller
     /**
      * Display the specified evaluasi.
      */
-    public function show($id)
-    {
-        $evaluasi = Evaluasi::with([
-            'detailEvaluasi.kriteria',
-            'detailEvaluasi.subKriteria'
-        ])->findOrFail($id);
-        
-        // Security check: only show if the user is the evaluator
-        if ($evaluasi->evaluator_id !== Auth::id()) {
-            return redirect()->route('kepsek.evaluasi-form.index')
-                ->with('error', 'Anda tidak memiliki akses untuk melihat evaluasi ini');
-        }
-        
-        $guru = Guru::with(['user', 'mataPelajaran'])->findOrFail($evaluasi->guru_id);
-        $periodeEvaluasi = PeriodeEvaluasi::findOrFail($evaluasi->periode_evaluasi_id);
-        
-        // Get kriteria list with sub kriteria
-        $kriteriaList = Kriteria::with(['subKriteria' => function ($query) {
-            $query->where('aktif', true)->orderBy('urutan');
-        }])
-            ->where('aktif', true)
-            ->orderBy('nama')
-            ->get();
-        
-        return Inertia::render('Kepsek/EvaluasiForm/Show', [
-            'guru' => $guru,
-            'kriteriaList' => $kriteriaList,
-            'periodeEvaluasi' => $periodeEvaluasi,
-            'evaluasi' => $evaluasi,
-        ]);
+    /**
+ * Display the specified evaluasi.
+ */
+/**
+ * Display the specified evaluasi.
+ */
+public function show(Request $request)
+{
+    // Ambil guru_id dari query parameter
+    $guruId = $request->query('guru');
+    
+    if (!$guruId) {
+        return redirect()->route('kepsek.evaluasi-form.index')
+            ->with('error', 'ID Guru tidak ditemukan');
     }
+    
+    // Validasi guru exists
+    $guru = Guru::with(['user', 'mataPelajaran'])->find($guruId);
+    
+    if (!$guru) {
+        return redirect()->route('kepsek.evaluasi-form.index')
+            ->with('error', 'Data guru tidak ditemukan');
+    }
+    
+    // Get active periode evaluasi
+    $periodeAktif = PeriodeEvaluasi::where('status', 'aktif')
+        ->orderBy('created_at', 'desc')
+        ->first();
+    
+    if (!$periodeAktif) {
+        return redirect()->route('kepsek.evaluasi-form.index')
+            ->with('error', 'Tidak ada periode evaluasi yang aktif');
+    }
+    
+    // Get evaluasi based on guru_id, periode, and evaluator
+    $evaluasi = Evaluasi::with([
+        'detailEvaluasi.kriteria',
+        'detailEvaluasi.subKriteria'
+    ])
+        ->where('guru_id', $guruId)
+        ->where('periode_evaluasi_id', $periodeAktif->id)
+        ->where('evaluator_id', Auth::id())
+        ->where('jenis', 'kepsek') // Pastikan hanya evaluasi dari kepsek
+        ->first();
+    
+    if (!$evaluasi) {
+        return redirect()->route('kepsek.evaluasi-form.index')
+            ->with('error', 'Evaluasi tidak ditemukan. Silakan buat evaluasi terlebih dahulu.');
+    }
+    
+    // Security check: pastikan yang akses adalah evaluator yang bersangkutan
+    if ($evaluasi->evaluator_id !== Auth::id()) {
+        return redirect()->route('kepsek.evaluasi-form.index')
+            ->with('error', 'Anda tidak memiliki akses untuk melihat evaluasi ini');
+    }
+    
+    $periodeEvaluasi = PeriodeEvaluasi::findOrFail($evaluasi->periode_evaluasi_id);
+    
+    // Get kriteria list with sub kriteria
+    $kriteriaList = Kriteria::with(['subKriteria' => function ($query) {
+        $query->where('aktif', true)->orderBy('urutan');
+    }])
+        ->where('aktif', true)
+        ->orderBy('nama')
+        ->get();
+    
+    return Inertia::render('Kepsek/EvaluasiForm/Show', [
+        'guru' => $guru,
+        'kriteriaList' => $kriteriaList,
+        'periodeEvaluasi' => $periodeEvaluasi,
+        'evaluasi' => $evaluasi,
+    ]);
+}
     
     /**
      * Show the form for editing the specified evaluasi.

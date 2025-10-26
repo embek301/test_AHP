@@ -134,14 +134,15 @@ export default function EvaluasiFormIndex({
 
     // Navigate to view/edit form
     const goToViewForm = (guruId: number) => {
-        // Pastikan periode aktif tersedia
-        if (!periodeAktif) {
-            toast.error('Tidak ada periode evaluasi aktif');
-            return;
-        }
+    // Pastikan periode aktif tersedia
+    if (!periodeAktif) {
+        toast.error('Tidak ada periode evaluasi aktif');
+        return;
+    }
 
-        router.get(route('kepsek.evaluasi-form.show', guruId));
-    };
+    // Kirim sebagai query parameter ?guru=id
+    router.get(route('kepsek.evaluasi-form.show', { guru: guruId }));
+};
 
     const breadcrumbs: BreadcrumbItem[] = [
         {

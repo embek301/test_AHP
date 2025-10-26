@@ -228,8 +228,8 @@ export default function GuruEvaluasiForm({
     }, [formValues.detail_evaluasi, currentSection]);
 
     const goToSection = (index: number) => {
-    setCurrentSection(index);
-};
+        setCurrentSection(index);
+    };
 
     const goToNextSection = () => {
         if (currentSection < sectionedItems.length) {
@@ -244,12 +244,10 @@ export default function GuruEvaluasiForm({
     };
 
     const onSubmit = (data: EvaluasiFormValues, status: 'draft' | 'selesai' = 'draft') => {
-        // Filter detail evaluasi: hapus yang nilai 0 untuk draft, validasi semua untuk selesai
         const filteredDetailEvaluasi = status === 'selesai' 
             ? data.detail_evaluasi 
             : data.detail_evaluasi.filter(detail => detail.nilai > 0);
         
-        // Validasi: pastikan semua nilai terisi jika status selesai
         if (status === 'selesai') {
             const hasEmptyValue = data.detail_evaluasi.some(detail => detail.nilai === 0);
             if (hasEmptyValue) {
@@ -269,7 +267,6 @@ export default function GuruEvaluasiForm({
             detail_evaluasi: filteredDetailEvaluasi,
         };
         
-        // Debug: Log payload sebelum dikirim
         console.log('Payload yang akan dikirim:', payload);
         console.log('Total detail evaluasi:', filteredDetailEvaluasi.length);
         console.log('Detail evaluasi:', filteredDetailEvaluasi);
@@ -288,7 +285,6 @@ export default function GuruEvaluasiForm({
                     },
                     onError: (errors) => {
                         console.error('Error dari server:', errors);
-                        // Tampilkan error secara spesifik
                         const errorMessages = Object.values(errors).flat();
                         errorMessages.forEach((msg: any) => {
                             toast.error(typeof msg === 'string' ? msg : 'Terjadi kesalahan saat menyimpan evaluasi');
@@ -314,7 +310,6 @@ export default function GuruEvaluasiForm({
                     },
                     onError: (errors) => {
                         console.error('Error dari server:', errors);
-                        // Tampilkan error secara spesifik
                         const errorMessages = Object.values(errors).flat();
                         errorMessages.forEach((msg: any) => {
                             toast.error(typeof msg === 'string' ? msg : 'Terjadi kesalahan saat menyimpan evaluasi');
@@ -394,21 +389,33 @@ export default function GuruEvaluasiForm({
                                 </div>
                                 
                                 <div>
-                                    <h4 className="text-sm font-medium">Nilai:</h4>
-                                    <div className="flex space-x-2 mt-1">
-                                        {[1, 2, 3, 4, 5].map((value) => (
-                                            <div
-                                                key={value}
-                                                className={`h-10 w-10 flex items-center justify-center rounded-full border-2 ${
-                                                    detail?.nilai === value
-                                                        ? 'border-indigo-600 bg-indigo-100 text-indigo-800'
-                                                        : 'border-gray-300 bg-gray-50 text-gray-400'
-                                                }`}
-                                            >
-                                                {value}
-                                            </div>
-                                        ))}
+                                    <h4 className="text-sm font-medium mb-2">Nilai: {detail?.nilai || 'Tidak ada nilai'}</h4>
+                                    <div className="flex space-x-2">
+                                        {[1, 2, 3, 4, 5].map((value) => {
+                                            // Konversi nilai ke integer untuk perbandingan
+                                            const nilaiInt = detail ? Math.round(Number(detail.nilai)) : 0;
+                                            const isSelected = nilaiInt === value;
+                                            return (
+                                                <div
+                                                    key={value}
+                                                    className={`h-12 w-12 flex items-center justify-center rounded-full border-2 text-lg font-semibold ${
+                                                        isSelected
+                                                            ? 'border-indigo-600 bg-indigo-600 text-white shadow-md'
+                                                            : 'border-gray-200 bg-gray-50 text-gray-400'
+                                                    }`}
+                                                >
+                                                    {value}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
+                                    <p className="mt-2 text-xs text-gray-500">
+                                        {Math.round(Number(detail?.nilai)) === 1 && 'Sangat Kurang'}
+                                        {Math.round(Number(detail?.nilai)) === 2 && 'Kurang'}
+                                        {Math.round(Number(detail?.nilai)) === 3 && 'Cukup'}
+                                        {Math.round(Number(detail?.nilai)) === 4 && 'Baik'}
+                                        {Math.round(Number(detail?.nilai)) === 5 && 'Sangat Baik'}
+                                    </p>
                                 </div>
                                 
                                 {detail?.komentar && (
@@ -467,7 +474,6 @@ export default function GuruEvaluasiForm({
                                     variant={currentSection === index ? "default" : "outline"}
                                     className={`px-3 min-w-[40px] ${isSectionComplete ? "bg-indigo-100 border-indigo-300 text-indigo-800" : ""}`}
                                     onClick={() => goToSection(index)}
-                                    
                                 >
                                     {index + 1}
                                 </Button>
@@ -648,13 +654,7 @@ export default function GuruEvaluasiForm({
                                     type="submit"
                                     disabled={isSubmitting || completionPercentage < 100}
                                 >
-                                    {isSubmitting ? (
-                                        <>
-                                            Menyimpan...
-                                        </>
-                                    ) : (
-                                        'Selesai & Simpan'
-                                    )}
+                                    {isSubmitting ? 'Menyimpan...' : 'Selesai & Simpan'}
                                 </Button>
                             )}
                         </div>
